@@ -202,7 +202,7 @@
         </div>
 
         <!-- ====== ATTENDANCE SUMMARY METRICS ====== -->
-        <div class="metric-grid">
+        <div class="metric-grid" style="grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));">
           <!-- Total formations -->
           <div class="metric-card">
             <div class="metric-icon" style="color: var(--primary); background: rgba(30,58,41,0.08);">
@@ -233,6 +233,17 @@
             <div class="metric-data">
               <div class="label">Late Arrivals</div>
               <div class="value" id="stat-late">0</div>
+            </div>
+          </div>
+
+          <!-- Absent days -->
+          <div class="metric-card">
+            <div class="metric-icon" style="color: #ef4444; background: rgba(239,68,68,0.1);">
+              <i class="fa-solid fa-circle-xmark"></i>
+            </div>
+            <div class="metric-data">
+              <div class="label">Absent Sessions</div>
+              <div class="value" id="stat-absent" style="color: #ef4444;">0</div>
             </div>
           </div>
 
@@ -284,10 +295,7 @@
           </div>
         </div>
 
-        <!-- ====== DOCUMENT DOWNLOAD SECTION ====== -->
-        <!-- id="documents-section" matches the sidebar anchor link. -->
-
-      </div>
+        </div>
     </main>
   </div>
 
@@ -422,89 +430,18 @@
           const total = records.length;
           const present = records.filter(r => (r.status || '').toUpperCase() === 'PRESENT').length;
           const late = records.filter(r => (r.status || '').toUpperCase() === 'LATE').length;
+          const absent = records.filter(r => (r.status || '').toUpperCase() === 'ABSENT').length;
           const rate = total > 0 ? Math.round(((present + late) / total) * 100) : 0;
 
           document.getElementById("stat-total").textContent = total;
           document.getElementById("stat-present").textContent = present;
           document.getElementById("stat-late").textContent = late;
+          const absentEl = document.getElementById("stat-absent");
+          if (absentEl) absentEl.textContent = absent;
           document.getElementById("stat-rate").textContent = `${rate}%`;
         }
       } catch (err) {
         console.error(err);
-      }
-
-      // ====== STEP 5: LOAD PUBLISHED DOCUMENTS & MODULES ======
-      try {
-        const { data: dbDocs } = await window.supabaseClient
-          .from("documents")
-          .select("id, title, description, category, file_path, file_name, file_type, file_size_bytes")
-          .eq("is_published", true)
-          .order("created_at", { ascending: false });
-
-        let localCache = [];
-        try {
-          localCache = JSON.parse(localStorage.getItem('rotcims_modules_cache') || '[]');
-        } catch (e) { localCache = []; }
-
-        const seen = new Set();
-        const combined = [];
-        for (const item of [...(dbDocs || []), ...localCache]) {
-          const key = item.id || item.file_path || item.title;
-          if (!seen.has(key)) {
-            seen.add(key);
-            combined.push(item);
-          }
-        }
-
-        const docsGrid = document.getElementById("cadet-docs-grid");
-
-        if (combined.length === 0) {
-          docsGrid.innerHTML = `
-            <div style="text-align: center; padding: 2.5rem 1.5rem; color: var(--slate); grid-column: 1 / -1; background: #fafafa; border-radius: 8px; border: 1px dashed var(--border);">
-              <i class="fa-solid fa-folder-open" style="font-size: 2rem; color: var(--brass-light); margin-bottom: 0.5rem; display: block;"></i>
-              <strong>No training modules published yet.</strong>
-              <p style="font-size: 0.85rem; margin-top: 0.25rem;">Command officers and instructors will post course modules and syllabus guides here.</p>
-            </div>
-          `;
-        } else {
-          // Helper: file badges
-          function getBadge(fn, ft) {
-            const ext = (fn || '').split('.').pop().toLowerCase();
-            if (['docx', 'doc'].includes(ext)) return { label: 'WORD .DOCX', color: '#0284c7', bg: '#e0f2fe', icon: 'fa-file-word' };
-            if (['xlsx', 'xls', 'csv'].includes(ext)) return { label: 'EXCEL .XLSX', color: '#16a34a', bg: '#dcfce7', icon: 'fa-file-excel' };
-            if (['pdf'].includes(ext)) return { label: 'PDF MANUAL', color: '#dc2626', bg: '#fee2e2', icon: 'fa-file-pdf' };
-            if (['pptx', 'ppt'].includes(ext)) return { label: 'POWERPOINT', color: '#ea580c', bg: '#ffedd5', icon: 'fa-file-powerpoint' };
-            return { label: ext.toUpperCase() || 'DOCUMENT', color: '#b88e2c', bg: '#fef3c7', icon: 'fa-file-lines' };
-          }
-
-          // Show top 6 on dashboard
-          docsGrid.innerHTML = combined.slice(0, 6).map(d => {
-            const badge = getBadge(d.file_name || d.file_path, d.file_type);
-            const safePath = encodeURIComponent(d.file_path || '');
-            const safeName = encodeURIComponent(d.file_name || d.title || 'document');
-            return `
-              <div class="card" style="padding: 1.25rem; display: flex; flex-direction: column; justify-content: space-between; border-top: 3px solid ${badge.color}; box-shadow: 0 2px 8px rgba(0,0,0,0.04);">
-                <div>
-                  <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
-                    <span style="font-size: 0.68rem; font-weight: 800; padding: 0.15rem 0.5rem; border-radius: 4px; background: ${badge.bg}; color: ${badge.color};">
-                      <i class="fa-solid ${badge.icon}" style="margin-right: 0.25rem;"></i>${badge.label}
-                    </span>
-                    <span class="badge badge-admin" style="font-size: 0.72rem;">${d.category || 'General'}</span>
-                  </div>
-                  <h4 style="font-size: 0.98rem; font-weight: 700; color: var(--ink); line-height: 1.35; margin-top: 0.35rem;">${d.title}</h4>
-                  <p style="font-size: 0.8rem; margin-top: 0.35rem; color: var(--slate); line-height: 1.4; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;">${d.description || 'Instructional doctrine module and lesson handout.'}</p>
-                </div>
-                <div style="margin-top: 1rem; border-top: 1px dashed var(--border); padding-top: 0.75rem;">
-                  <button onclick="downloadDoc('${safePath}', '${safeName}')" class="btn btn-primary btn-sm" style="width: 100%; justify-content: center; font-size: 0.82rem;">
-                    <i class="fa-solid fa-download"></i> Download ${badge.label.split(' ')[0]}
-                  </button>
-                </div>
-              </div>
-            `;
-          }).join('');
-        }
-      } catch (e) {
-        console.error(e);
       }
     });
 
