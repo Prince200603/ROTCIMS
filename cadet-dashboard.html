@@ -64,6 +64,19 @@
   <script src="js/config.js"></script>
   <!-- Auth helpers: requireAuth(), logout() -->
   <script src="js/auth.js"></script>
+  <style>
+    .cadet-welcome-card {
+      background: linear-gradient(135deg, #09170e 0%, #122419 45%, #1e3a29 100%) !important;
+      color: #ffffff !important;
+      border: 2px solid #b88e2c !important;
+    }
+    .cadet-welcome-card * {
+      box-sizing: border-box;
+    }
+    .cadet-welcome-card h2 {
+      color: #ffffff !important;
+    }
+  </style>
 </head>
 
 <body>
@@ -137,7 +150,7 @@
       <div class="content-body">
 
         <!-- ====== CADET DASHBOARD WELCOME & QUICK ACCESS ====== -->
-        <div class="card" style="background: linear-gradient(135deg, #09170e 0%, #122419 45%, #1e3a29 100%); color: #fff; border: 2px solid #b88e2c; border-radius: 16px; padding: 1.75rem; margin-bottom: 2rem; position: relative; overflow: hidden; box-shadow: 0 10px 30px rgba(0,0,0,0.18);">
+        <div class="card cadet-welcome-card" style="background: linear-gradient(135deg, #09170e 0%, #122419 45%, #1e3a29 100%) !important; color: #fff !important; border: 2px solid #b88e2c !important; border-radius: 16px !important; padding: 1.75rem !important; margin-bottom: 2rem !important; position: relative !important; overflow: hidden !important; box-shadow: 0 10px 30px rgba(0,0,0,0.18) !important;">
           <div style="position: absolute; right: -25px; bottom: -25px; opacity: 0.08; pointer-events: none;">
             <img src="assets/logo.png" style="width: 240px; height: 240px;" onerror="this.src='assets/icon.png'">
           </div>
