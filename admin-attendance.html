@@ -275,6 +275,17 @@
                 </button>
               </div>
 
+              <!-- Company Filter -->
+              <select id="filter-company" class="form-select" onchange="onCompanyFilterChanged(this.value)" style="width: 150px;">
+                <option value="all">All Companies</option>
+                <option value="Alpha">Alpha Company</option>
+                <option value="Bravo">Bravo Company</option>
+                <option value="Charlie">Charlie Company</option>
+                <option value="Delta">Delta Company</option>
+                <option value="Medics">Medics Unit</option>
+                <option value="GHQ">Headquarters (GHQ)</option>
+              </select>
+
               <!-- Platoon Filter -->
               <select id="filter-platoon" class="form-select" onchange="onPlatoonFilterChanged(this.value)" style="width: 140px;">
                 <option value="all">All Platoons</option>
@@ -664,7 +675,13 @@
     let allSessions = [];
     let cachedAttendanceRecords = [];
     let activeStatusFilter = 'all';  // 'all' | 'PRESENT' | 'LATE' | 'EXCUSED' | 'ABSENT'
+    let activeCompanyFilter = 'all';
     let activePlatoonFilter = 'all';
+
+    function onCompanyFilterChanged(val) {
+      activeCompanyFilter = val;
+      filterAndRenderRecords();
+    }
     let currentTableDensity = localStorage.getItem('rotcims-table-density') || 'comfortable';
 
     // ── INITIALIZATION ──────────────────────────────────────────────────
@@ -1076,6 +1093,15 @@
       // Status filter
       if (activeStatusFilter && activeStatusFilter !== 'all') {
         filtered = filtered.filter(r => (r.status || '').toUpperCase() === activeStatusFilter.toUpperCase());
+      }
+
+      // Company filter
+      if (activeCompanyFilter && activeCompanyFilter !== 'all') {
+        filtered = filtered.filter(r => {
+          const profile = r.cadets?.profiles || {};
+          const comp = (profile.company || r.cadets?.rotc_unit || '').toLowerCase();
+          return comp.includes(activeCompanyFilter.toLowerCase());
+        });
       }
 
       // Platoon filter

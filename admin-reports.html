@@ -613,68 +613,7 @@
       <div class="content-body">
 
         <!-- ===== FILTER + EXPORT TOOLBAR ===== -->
-        <div class="filter-card no-print" style="margin-bottom: 1.25rem;">
-          <div style="display:flex;gap:1rem;flex-wrap:wrap;align-items:flex-end;">
-
-            <!-- Session -->
-            <div style="flex:1;min-width:210px;">
-              <label class="form-label">Formation Drill Session</label>
-              <select id="report-session" class="form-select" onchange="generateReport()">
-                <option value="all">All Formations</option>
-              </select>
-            </div>
-
-            <!-- Company -->
-            <div style="min-width:150px;">
-              <label class="form-label">Company</label>
-              <select id="report-company" class="form-select" onchange="generateReport()">
-                <option value="all">All Companies</option>
-                <option value="Alpha">Alpha Company</option>
-                <option value="Bravo">Bravo Company</option>
-                <option value="Charlie">Charlie Company</option>
-                <option value="Delta">Delta Company</option>
-                <option value="Medics">Medics Unit</option>
-                <option value="GHQ">Headquarters (GHQ)</option>
-              </select>
-            </div>
-
-            <!-- Platoon -->
-            <div style="min-width:140px;">
-              <label class="form-label">Platoon</label>
-              <select id="report-platoon" class="form-select" onchange="generateReport()">
-                <option value="all">All Platoons</option>
-                <option value="1st Platoon">1st Platoon</option>
-                <option value="2nd Platoon">2nd Platoon</option>
-                <option value="3rd Platoon">3rd Platoon</option>
-              </select>
-            </div>
-
-            <!-- Status Filter -->
-            <div style="min-width:130px;">
-              <label class="form-label">Status Filter</label>
-              <select id="report-status" class="form-select" onchange="generateReport()">
-                <option value="all">All Status</option>
-                <option value="present">Present</option>
-                <option value="late">Late</option>
-                <option value="absent">Absent</option>
-              </select>
-            </div>
-
-            <!-- Paper Size -->
-            <div class="paper-size-group">
-              <label><i class="fa-solid fa-file"></i> Paper Size</label>
-              <select id="paper-size" onchange="applyPaperSize()">
-                <option value="A4 portrait">A4 Portrait</option>
-                <option value="A4 landscape" selected>A4 Landscape</option>
-                <option value="letter portrait">Short (Letter) Portrait</option>
-                <option value="letter landscape">Short (Letter) Landscape</option>
-                <option value="legal portrait">Long (Legal) Portrait</option>
-                <option value="legal landscape">Long (Legal) Landscape</option>
-              </select>
-            </div>
-
-          </div>
-        </div><!-- end filter-card -->
+        
 
         <!-- ===== REPORT SECTION TABS ===== -->
         <div class="report-tabs no-print" id="report-tabs">
@@ -803,6 +742,71 @@
               <div class="metric-data"><div class="label">Turnout Rate</div><div class="value" id="rep-rate">0%</div></div>
             </div>
           </div>
+
+          <!-- ===== FILTER TOOLBAR (Centered between Export/Metrics and Company Ledgers) ===== -->
+          <div class="filter-card no-print" style="margin-bottom: 1.25rem;">
+          <div style="display:flex;gap:1rem;flex-wrap:wrap;align-items:flex-end;">
+
+            <!-- Session -->
+            <div style="flex:1;min-width:210px;">
+              <label class="form-label">Formation Drill Session</label>
+              <select id="report-session" class="form-select" onchange="generateReport()">
+                <option value="all">All Formations</option>
+              </select>
+            </div>
+
+            <!-- Company -->
+            <div style="min-width:150px;">
+              <label class="form-label">Company</label>
+              <select id="report-company" class="form-select" onchange="generateReport()">
+                <option value="all">All Companies</option>
+                <option value="Alpha">Alpha Company</option>
+                <option value="Bravo">Bravo Company</option>
+                <option value="Charlie">Charlie Company</option>
+                <option value="Delta">Delta Company</option>
+                <option value="Medics">Medics Unit</option>
+                <option value="GHQ">Headquarters (GHQ)</option>
+              </select>
+            </div>
+
+            <!-- Platoon -->
+            <div style="min-width:140px;">
+              <label class="form-label">Platoon</label>
+              <select id="report-platoon" class="form-select" onchange="generateReport()">
+                <option value="all">All Platoons</option>
+                <option value="1st Platoon">1st Platoon</option>
+                <option value="2nd Platoon">2nd Platoon</option>
+                <option value="3rd Platoon">3rd Platoon</option>
+              </select>
+            </div>
+
+            <!-- Status Filter -->
+            <div style="min-width:130px;">
+              <label class="form-label">Status Filter</label>
+              <select id="report-status" class="form-select" onchange="generateReport()">
+                <option value="all">All Status</option>
+                <option value="present">Present</option>
+                <option value="late">Late</option>
+                <option value="absent">Absent</option>
+              </select>
+            </div>
+
+            <!-- Paper Size -->
+            <div class="paper-size-group">
+              <label><i class="fa-solid fa-file"></i> Paper Size</label>
+              <select id="paper-size" onchange="applyPaperSize()">
+                <option value="A4 portrait">A4 Portrait</option>
+                <option value="A4 landscape" selected>A4 Landscape</option>
+                <option value="letter portrait">Short (Letter) Portrait</option>
+                <option value="letter landscape">Short (Letter) Landscape</option>
+                <option value="legal portrait">Long (Legal) Portrait</option>
+                <option value="legal landscape">Long (Legal) Landscape</option>
+              </select>
+            </div>
+
+          </div>
+        </div><!-- end filter-card -->
+
 <div id="printable-doc">
 
           <!-- Document Meta Row (Report No. + Date) -->
