@@ -109,7 +109,7 @@
           <li><a href="cadet-dashboard.html" class="active"><i class="fa-solid fa-table-columns"></i> Dashboard</a></li>
           <li><a href="cadet-announcements.html"><i class="fa-solid fa-bullhorn"></i> Announcements</a></li>
           <li><a href="cadet-modules.html"><i class="fa-solid fa-book-open"></i> Learning Modules</a></li>
-          <li><a href="#attendance-history"><i class="fa-solid fa-clipboard-check"></i> Attendance History</a></li>
+          <li><a href="cadet-attendance.html"><i class="fa-solid fa-clipboard-check"></i> Attendance History</a></li>
           <li><a href="cadet-modules.html"><i class="fa-solid fa-folder-open"></i> Training Doctrine</a></li>
           <li><a href="cadet-profile.html"><i class="fa-solid fa-gear"></i> Settings</a></li>
         </ul>
@@ -214,100 +214,6 @@
           </div>
         </div>
 
-        <!-- ====== ATTENDANCE SUMMARY METRICS ====== -->
-        <div class="metric-grid" style="grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));">
-          <!-- Total formations -->
-          <div class="metric-card">
-            <div class="metric-icon" style="color: var(--primary); background: rgba(30,58,41,0.08);">
-              <i class="fa-solid fa-calendar-check"></i>
-            </div>
-            <div class="metric-data">
-              <div class="label">Total Formations</div>
-              <div class="value" id="stat-total">0</div>
-            </div>
-          </div>
-
-          <!-- Present days -->
-          <div class="metric-card">
-            <div class="metric-icon" style="color: var(--success); background: var(--success-bg);">
-              <i class="fa-solid fa-circle-check"></i>
-            </div>
-            <div class="metric-data">
-              <div class="label">Present Days</div>
-              <div class="value" id="stat-present">0</div>
-            </div>
-          </div>
-
-          <!-- Late arrivals -->
-          <div class="metric-card">
-            <div class="metric-icon" style="color: var(--warning); background: var(--warning-bg);">
-              <i class="fa-solid fa-clock-rotate-left"></i>
-            </div>
-            <div class="metric-data">
-              <div class="label">Late Arrivals</div>
-              <div class="value" id="stat-late">0</div>
-            </div>
-          </div>
-
-          <!-- Absent days -->
-          <div class="metric-card">
-            <div class="metric-icon" style="color: #ef4444; background: rgba(239,68,68,0.1);">
-              <i class="fa-solid fa-circle-xmark"></i>
-            </div>
-            <div class="metric-data">
-              <div class="label">Absent Sessions</div>
-              <div class="value" id="stat-absent" style="color: #ef4444;">0</div>
-            </div>
-          </div>
-
-          <!-- Turnout rate -->
-          <div class="metric-card">
-            <div class="metric-icon" style="color: var(--brass); background: var(--brass-subtle);">
-              <i class="fa-solid fa-chart-line"></i>
-            </div>
-            <div class="metric-data">
-              <div class="label">Turnout Rate</div>
-              <div class="value" id="stat-rate">0%</div>
-            </div>
-          </div>
-        </div>
-
-        <!-- ====== ATTENDANCE HISTORY TABLE ====== -->
-        <!-- id="attendance-history" matches the sidebar anchor link so clicking
-             "Attendance History" in the nav scrolls directly to this card. -->
-        <div class="card" id="attendance-history">
-          <div class="card-header">
-            <div>
-              <h2>My Drill Attendance Records</h2>
-              <p style="font-size: 0.8rem; color: var(--slate);">History of recorded Saturday/Sunday formations and parade inspections.</p>
-            </div>
-          </div>
-
-          <!-- .table-responsive wraps the table in a horizontal scroll container
-               so wide tables don't break the layout on small screens. -->
-          <div class="table-responsive">
-            <table class="data-table">
-              <thead>
-                <tr>
-                  <th>Drill Date</th>
-                  <th>Formation / Session Title</th>  <!-- Joined from attendance_sessions table -->
-                  <th>Time-In</th>
-                  <th>Attendance Method</th>           <!-- e.g. "qr", "manual" -->
-                  <th>Status</th>                      <!-- PRESENT / LATE / ABSENT -->
-                </tr>
-              </thead>
-              <!-- id="attendance-tbody": JS replaces the content of this <tbody>
-                   with dynamically generated <tr> rows after the DB query.
-                   The default "Loading..." row shows until the data arrives. -->
-              <tbody id="attendance-tbody">
-                <tr>
-                  <td colspan="5" style="text-align: center; padding: 2rem; color: var(--slate);">Loading attendance records...</td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
-        </div>
-
         </div>
     </main>
   </div>
@@ -358,104 +264,6 @@
 
       // ====== STEP 3: LOAD RECENT COMMAND ANNOUNCEMENTS ======
       await loadRecentAnnouncements();
-
-      // ====== STEP 4: LOAD ATTENDANCE RECORDS ======
-      try {
-        // Resolve this cadet's public.cadets.id
-        const { data: cadetRecord } = await window.supabaseClient
-          .from("cadets")
-          .select("id")
-          .eq("profile_id", profile.id)
-          .maybeSingle();
-
-        const actualCadetId = cadetRecord?.id;
-
-        let records = [];
-        if (actualCadetId) {
-          const { data, error } = await window.supabaseClient
-            .from("attendance_records")
-            .select(`
-              id, status, scanned_at,
-              attendance_sessions ( id, title, session_date, status )
-            `)
-            .eq("cadet_id", actualCadetId)
-            .order("scanned_at", { ascending: false });
-
-          if (!error && data) records = data;
-
-          // ── ABSENT INJECTION: fetch all ENDED sessions ──────────────────
-          // For each session that has ended but the cadet has NO attendance
-          // record, inject a synthetic ABSENT row so the history is complete.
-          const { data: endedSessions } = await window.supabaseClient
-            .from("attendance_sessions")
-            .select("id, title, session_date, status")
-            .in("status", ["ended", "closed", "completed"]);
-
-          if (endedSessions && endedSessions.length > 0) {
-            const scannedSessionIds = new Set(records.map(r => r.attendance_sessions?.id).filter(Boolean));
-            const absentRows = endedSessions
-              .filter(s => !scannedSessionIds.has(s.id))
-              .map(s => ({
-                id: 'absent-' + s.id,
-                status: 'absent',
-                scanned_at: null,
-                attendance_sessions: { id: s.id, title: s.title, session_date: s.session_date }
-              }));
-            records = [...records, ...absentRows];
-            // Re-sort by date descending
-            records.sort((a, b) => {
-              const da = new Date(a.attendance_sessions?.session_date || a.scanned_at || 0);
-              const db = new Date(b.attendance_sessions?.session_date || b.scanned_at || 0);
-              return db - da;
-            });
-          }
-          // ────────────────────────────────────────────────────────────────
-        }
-
-        const tbody = document.getElementById("attendance-tbody");
-
-        if (!records || records.length === 0) {
-          tbody.innerHTML = '<tr><td colspan="5" style="text-align: center; padding: 2rem; color: var(--slate);">No drill attendance records logged yet.</td></tr>';
-        } else {
-          tbody.innerHTML = records.map(r => {
-            const dateStr = r.attendance_sessions?.session_date
-              ? new Date(r.attendance_sessions.session_date).toLocaleDateString('en-PH', {year:'numeric',month:'short',day:'2-digit'})
-              : (r.scanned_at ? new Date(r.scanned_at).toLocaleDateString() : '---');
-            const timeStr = r.scanned_at
-              ? new Date(r.scanned_at).toLocaleTimeString('en-PH', { hour12: false })
-              : '---';
-            const status = (r.status || 'present').toUpperCase();
-            const methodBadge = status === 'ABSENT'
-              ? '<span class="badge" style="background:rgba(239,68,68,0.15);color:#ef4444;">—</span>'
-              : '<span class="badge badge-admin">SCAN</span>';
-
-            return `
-              <tr>
-                <td><strong>${dateStr}</strong></td>
-                <td>${r.attendance_sessions?.title || 'Regular Drill Formation'}</td>
-                <td style="font-family: monospace;">${timeStr}</td>
-                <td>${methodBadge}</td>
-                <td><span class="badge badge-${status.toLowerCase()}">${status}</span></td>
-              </tr>
-            `;
-          }).join('');
-
-          const total = records.length;
-          const present = records.filter(r => (r.status || '').toUpperCase() === 'PRESENT').length;
-          const late = records.filter(r => (r.status || '').toUpperCase() === 'LATE').length;
-          const absent = records.filter(r => (r.status || '').toUpperCase() === 'ABSENT').length;
-          const rate = total > 0 ? Math.round(((present + late) / total) * 100) : 0;
-
-          document.getElementById("stat-total").textContent = total;
-          document.getElementById("stat-present").textContent = present;
-          document.getElementById("stat-late").textContent = late;
-          const absentEl = document.getElementById("stat-absent");
-          if (absentEl) absentEl.textContent = absent;
-          document.getElementById("stat-rate").textContent = `${rate}%`;
-        }
-      } catch (err) {
-        console.error(err);
-      }
     });
 
     // ====== RECENT COMMAND ANNOUNCEMENTS LOADER ======
