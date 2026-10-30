@@ -360,13 +360,24 @@
 
           if (!error && data) records = data;
 
-          // ── ABSENT INJECTION: fetch all ENDED sessions ──────────────────
-          // For each session that has ended but the cadet has NO attendance
-          // record, inject a synthetic ABSENT row so the history is complete.
-          const { data: endedSessions } = await window.supabaseClient
+          // ── ABSENT INJECTION: fetch all ENDED / CLOSED / PAST sessions ───
+          // In Supabase, sessions are ended when is_open = false OR status = 'closed'.
+          // We also treat any past session (session_date < today) as ended so
+          // cadets who missed the formation are clearly marked ABSENT.
+          const { data: allDbSessions } = await window.supabaseClient
             .from("attendance_sessions")
-            .select("id, title, session_date, status")
-            .in("status", ["ended", "closed", "completed"]);
+            .select("id, title, session_date, is_open, status");
+
+          const todayIso = new Date().toISOString().split("T")[0];
+          const endedSessions = (allDbSessions || []).filter(s => {
+            // Closed by admin switch
+            if (s.is_open === false) return true;
+            // Explicit ended/closed status
+            if (["ended", "closed", "completed"].includes(String(s.status || "").toLowerCase())) return true;
+            // Session date is already in the past
+            if (s.session_date && s.session_date < todayIso) return true;
+            return false;
+          });
 
           if (endedSessions && endedSessions.length > 0) {
             const scannedSessionIds = new Set(records.map(r => r.attendance_sessions?.id).filter(Boolean));
