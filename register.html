@@ -1,0 +1,1103 @@
+<!--
+  =============================================================================
+  FILE: register.html  |  Executive Cadet Enlistment Registration
+  PURPOSE: Public cadet self-enlistment / account-creation page.
+  FEATURES:
+    • Expanded Widescreen Layout (Utilizes Side Space)
+    • Profile Picture Upload with Circular Preview, Canvas Optimization & Status
+    • 2-Column Responsive Split Console (Side: Photo & Guidelines | Main: Enlistment Data)
+    • Role enforcement: All accounts created default to role="cadet" and status="approved".
+  =============================================================================
+-->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Cadet Enlistment Registration — ROTCIMS</title>
+
+  <!-- Global ROTCIMS stylesheets -->
+  <link rel="stylesheet" href="css/style.css">
+  <link rel="stylesheet" href="css/responsive.css">
+  <link rel="stylesheet" href="css/enhancements.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="js/config.js"></script>
+  <script src="js/auth.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+
+  <style>
+    body {
+      min-height: 100vh;
+      background: linear-gradient(135deg, #0a170f 0%, #122419 45%, #1e3a29 100%);
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      color: #111827;
+      padding-bottom: 4rem;
+    }
+
+    .reg-header {
+      background: rgba(18, 36, 25, 0.95);
+      backdrop-filter: blur(10px);
+      -webkit-backdrop-filter: blur(10px);
+      border-bottom: 1px solid rgba(184, 142, 44, 0.25);
+      padding: 0.85rem 2rem;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      position: sticky;
+      top: 0;
+      z-index: 40;
+    }
+
+    .reg-hero {
+      text-align: center;
+      padding: 3rem 1.5rem 1.75rem;
+      color: #fff;
+    }
+
+    .reg-hero h1 {
+      font-family: 'Oswald', sans-serif;
+      font-size: clamp(2rem, 4vw, 2.75rem);
+      color: #fff;
+      letter-spacing: 0.02em;
+      margin-bottom: 0.5rem;
+    }
+
+    .reg-hero p {
+      color: rgba(255, 255, 255, 0.78);
+      font-size: 0.95rem;
+      max-width: 680px;
+      margin: 0 auto;
+    }
+
+    /* ====== EXPANDED FULL-WIDTH CONTAINER ====== */
+    .reg-container {
+      max-width: 1220px;
+      width: 100%;
+      margin: 0 auto;
+      padding: 0 1.5rem;
+    }
+
+    .reg-card {
+      background: #ffffff;
+      border-radius: 20px;
+      box-shadow: 0 20px 50px rgba(0, 0, 0, 0.35);
+      border: 1px solid rgba(184, 142, 44, 0.2);
+      overflow: hidden;
+    }
+
+    .step-banner {
+      background: #f9fafb;
+      border-bottom: 1px solid #e5e7eb;
+      padding: 1.25rem 2.5rem;
+      display: flex;
+      justify-content: space-between;
+      gap: 1rem;
+      flex-wrap: wrap;
+    }
+
+    .step-item {
+      display: flex;
+      align-items: center;
+      gap: 0.6rem;
+      font-size: 0.84rem;
+      font-weight: 600;
+      color: #4b5563;
+    }
+
+    .step-item.active {
+      color: #1e3a29;
+    }
+
+    .step-num {
+      width: 26px;
+      height: 26px;
+      border-radius: 50%;
+      background: #b88e2c;
+      color: #fff;
+      display: grid;
+      place-items: center;
+      font-size: 0.75rem;
+      font-weight: 700;
+    }
+
+    /* ====== 2-COLUMN SPLIT GRID (EXPANDED SIDE) ====== */
+    .reg-split-grid {
+      display: grid;
+      grid-template-columns: 310px 1fr;
+      gap: 2.25rem;
+      align-items: start;
+    }
+
+    @media (max-width: 992px) {
+      .reg-split-grid {
+        grid-template-columns: 1fr;
+        gap: 1.5rem;
+      }
+      .reg-container {
+        padding: 0 1rem;
+      }
+    }
+
+    /* ====== PROFILE PICTURE COMPONENT (MATCHING USER SCREENSHOT) ====== */
+    .profile-pic-card {
+      background: #ffffff;
+      border-radius: 16px;
+    }
+
+    .profile-pic-title {
+      font-family: 'Inter', -apple-system, sans-serif;
+      font-size: 1.05rem;
+      font-weight: 700;
+      color: #1e3a5f;
+      text-align: center;
+      margin: 0 0 0.85rem;
+      letter-spacing: -0.01em;
+    }
+
+    .profile-pic-box {
+      border: 2px dashed #93c5fd;
+      border-radius: 20px;
+      background: #f8fafc;
+      padding: 1.75rem 1.25rem;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      text-align: center;
+      transition: all 0.25s ease;
+    }
+
+    .profile-pic-box:hover {
+      border-color: #3b82f6;
+      background: #f0fdf4;
+    }
+
+    .avatar-preview-wrap {
+      width: 165px;
+      height: 165px;
+      border-radius: 50%;
+      margin-bottom: 1.25rem;
+      position: relative;
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.14);
+      border: 4px solid #ffffff;
+      overflow: hidden;
+      background: linear-gradient(135deg, #153825, #22543d);
+    }
+
+    .avatar-preview-wrap img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      display: block;
+    }
+
+    .btn-select-photo {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0.5rem;
+      background: #ffffff;
+      border: 2px solid #0d9488;
+      color: #042f2e;
+      font-size: 0.95rem;
+      font-weight: 700;
+      padding: 0.65rem 1.45rem;
+      border-radius: 12px;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      box-shadow: 0 2px 8px rgba(13, 148, 136, 0.15);
+    }
+
+    .btn-select-photo:hover {
+      background: #ccfbf1;
+      transform: translateY(-1px);
+      box-shadow: 0 4px 14px rgba(13, 148, 136, 0.25);
+    }
+
+    .btn-select-photo:active {
+      transform: scale(0.98);
+    }
+
+    .btn-select-photo i {
+      color: #0f766e;
+      font-size: 1.05rem;
+    }
+
+    .photo-status-text {
+      font-size: 0.8rem;
+      color: #334155;
+      line-height: 1.5;
+      margin-top: 1rem;
+      max-width: 250px;
+    }
+
+    .cadet-guidelines-box {
+      margin-top: 1.25rem;
+      background: #f8fafc;
+      border: 1px solid #e2e8f0;
+      border-radius: 14px;
+      padding: 1.15rem;
+      font-size: 0.8rem;
+      color: #475569;
+      line-height: 1.55;
+    }
+
+    .cadet-guidelines-box h4 {
+      font-family: 'Oswald', sans-serif;
+      font-size: 0.95rem;
+      color: #0f172a;
+      margin: 0 0 0.5rem;
+      display: flex;
+      align-items: center;
+      gap: 0.4rem;
+    }
+
+    .cadet-guidelines-box ul {
+      margin: 0;
+      padding-left: 1.2rem;
+    }
+
+    .cadet-guidelines-box li {
+      margin-bottom: 0.35rem;
+    }
+
+    /* ====== FORM FIELDS & TYPOGRAPHY ====== */
+    .form-section-title {
+      font-family: 'Oswald', sans-serif;
+      font-size: 1.18rem;
+      color: #1e3a29;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      padding-bottom: 0.5rem;
+      border-bottom: 2px solid #f3f4f6;
+      margin-bottom: 1.25rem;
+      letter-spacing: 0.02em;
+    }
+
+    .form-group label {
+      display: flex;
+      align-items: center;
+      gap: 0.4rem;
+      font-size: 0.8rem;
+      font-weight: 600;
+      color: #374151;
+      margin-bottom: 0.35rem;
+    }
+
+    .input-icon-box {
+      position: relative;
+    }
+
+    .input-icon-box i {
+      position: absolute;
+      left: 0.9rem;
+      top: 50%;
+      transform: translateY(-50%);
+      color: #9ca3af;
+      font-size: 0.85rem;
+      pointer-events: none;
+    }
+
+    .input-icon-box input,
+    .input-icon-box select {
+      width: 100%;
+      padding: 0.68rem 0.85rem 0.68rem 2.4rem;
+      border: 1.5px solid #e5e7eb;
+      border-radius: 8px;
+      font-size: 0.88rem;
+      color: #111827;
+      background: #f9fafb;
+      transition: all 0.2s ease;
+      font-family: 'Inter', sans-serif;
+    }
+
+    .input-icon-box input:focus,
+    .input-icon-box select:focus {
+      outline: none;
+      border-color: #b88e2c;
+      box-shadow: 0 0 0 3px rgba(184, 142, 44, 0.12);
+      background: #ffffff;
+    }
+
+    .military-notice {
+      background: #fcf6e8;
+      border: 1px solid rgba(184, 142, 44, 0.3);
+      padding: 1rem 1.25rem;
+      border-radius: 10px;
+      display: flex;
+      gap: 0.75rem;
+      align-items: flex-start;
+      margin: 1.5rem 0;
+      font-size: 0.82rem;
+      color: #78350f;
+      line-height: 1.5;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Top Navigation Header -->
+  <header class="reg-header">
+    <div class="brand">
+      <img src="assets/logo.png" alt="Logo" style="height: 38px; width: 38px; object-fit: contain;" onerror="this.src='assets/icon.png'">
+      <div class="brand-text">
+        ROTCIMS
+        <span style="color: var(--brass-light); font-size: 0.65rem; text-transform: uppercase; font-weight: 600; letter-spacing: 0.1em; display: block;">
+          San Enrique ROTC Unit
+        </span>
+      </div>
+    </div>
+    <div>
+      <a href="index.html" class="btn btn-outline btn-sm" style="background: rgba(255,255,255,0.08); color: #fff; border-color: rgba(255,255,255,0.25);">
+        <i class="fa-solid fa-house"></i> Home
+      </a>
+      <a href="login.html" class="btn btn-brass btn-sm" style="margin-left: 0.5rem;">
+        <i class="fa-solid fa-right-to-bracket"></i> Sign In
+      </a>
+    </div>
+  </header>
+
+  <!-- Hero Header -->
+  <div class="reg-hero">
+    <div class="hero-badge" style="margin-bottom: 0.85rem;">
+      <i class="fa-solid fa-medal"></i> Department of Military Science &amp; Tactics
+    </div>
+    <h1>Cadet Enlistment Registration</h1>
+    <p>Complete your official digital registration for the San Enrique ROTC unit. All submissions are authorized for immediate digital ID and live QR attendance verification.</p>
+  </div>
+
+  <!-- ====== EXPANDED REGISTRATION CONTAINER ====== -->
+  <div class="reg-container">
+    <div class="reg-card">
+
+      <!-- Step Indicator Banner -->
+      <div class="step-banner">
+        <div class="step-item active">
+          <div class="step-num"><i class="fa-solid fa-camera" style="font-size: 0.7rem;"></i></div>
+          <span>Profile Photo</span>
+        </div>
+        <div class="step-item active">
+          <div class="step-num">1</div>
+          <span>Cadet Identity</span>
+        </div>
+        <div class="step-item active">
+          <div class="step-num">2</div>
+          <span>Contact &amp; Emergency</span>
+        </div>
+        <div class="step-item active">
+          <div class="step-num">3</div>
+          <span>Account Credentials</span>
+        </div>
+      </div>
+
+      <div style="padding: 2.25rem;">
+        <div id="alert-box" class="alert" style="display: none; margin-bottom: 1.5rem;"></div>
+
+        <form id="register-form">
+          <div class="reg-split-grid">
+            
+            <!-- ====== LEFT / SIDE COLUMN: PROFILE PICTURE (MATCHING USER SCREENSHOT) ====== -->
+            <div class="reg-side-col">
+              <div class="profile-pic-card">
+                <h3 class="profile-pic-title">Profile Picture</h3>
+                <div class="profile-pic-box">
+                  <div class="avatar-preview-wrap">
+                    <img id="avatar-preview-img" src="assets/icon.png" alt="Profile Preview" onerror="this.src='assets/logo.png'">
+                  </div>
+
+                  <!-- Hidden File Input for Native File Picker -->
+                  <input type="file" id="profile_photo_input" accept="image/png, image/jpeg, image/jpg, image/webp" style="display: none;" onchange="handlePhotoSelect(event)">
+                  
+                  <!-- Select Photo Button -->
+                  <button type="button" class="btn-select-photo" onclick="document.getElementById('profile_photo_input').click()">
+                    <i class="fa-solid fa-camera"></i> Select Photo
+                  </button>
+
+                  <!-- Dynamic Status Caption -->
+                  <div id="photo-status-text" class="photo-status-text">
+                    Ready: select a 2x2 or military uniform photo. The server will optimize and re-encode it.
+                  </div>
+                </div>
+              </div>
+
+              <!-- Cadet Guidelines Box -->
+              <div class="cadet-guidelines-box">
+                <h4><i class="fa-solid fa-shield-halved" style="color: var(--brass);"></i> Photo Specifications</h4>
+                <ul>
+                  <li>Military haircut or neat formal grooming</li>
+                  <li>Plain light or white background</li>
+                  <li>No sunglasses or headgear obscuring facial features</li>
+                  <li>PNG, JPG, or WEBP up to 5MB</li>
+                </ul>
+              </div>
+            </div>
+
+            <!-- ====== RIGHT / MAIN COLUMN: REGISTRATION DATA FIELDS ====== -->
+            <div class="reg-main-col">
+
+              <!-- SECTION 1: IDENTITY & ACADEMIC PROFILE -->
+              <div class="form-section-title">
+                <i class="fa-solid fa-id-card-clip" style="color: var(--brass);"></i>
+                1. Cadet Identity &amp; Academic Record
+              </div>
+
+              <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem; margin-bottom: 1.25rem;">
+                <div class="form-group">
+                  <label for="first_name"><i class="fa-solid fa-user"></i> First Name *</label>
+                  <div class="input-icon-box">
+                    <i class="fa-solid fa-signature"></i>
+                    <input type="text" id="first_name" required placeholder="e.g. Juan">
+                  </div>
+                </div>
+
+                <div class="form-group">
+                  <label for="middle_name"><i class="fa-solid fa-user"></i> Middle Name</label>
+                  <div class="input-icon-box">
+                    <i class="fa-solid fa-signature"></i>
+                    <input type="text" id="middle_name" placeholder="e.g. Reyes">
+                  </div>
+                </div>
+
+                <div class="form-group">
+                  <label for="last_name"><i class="fa-solid fa-user"></i> Last Name *</label>
+                  <div class="input-icon-box">
+                    <i class="fa-solid fa-signature"></i>
+                    <input type="text" id="last_name" required placeholder="e.g. Dela Cruz">
+                  </div>
+                </div>
+              </div>
+
+              <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem; margin-bottom: 1.25rem;">
+                <div class="form-group">
+                  <label for="student_id"><i class="fa-solid fa-hashtag"></i> Student ID Number *</label>
+                  <div class="input-icon-box">
+                    <i class="fa-solid fa-barcode"></i>
+                    <input type="text" id="student_id" required placeholder="e.g. 2026-00123">
+                  </div>
+                </div>
+
+                <div class="form-group">
+                  <label for="course"><i class="fa-solid fa-graduation-cap"></i> Degree Course *</label>
+                  <div class="input-icon-box">
+                    <i class="fa-solid fa-book-bookmark"></i>
+                    <select id="course" required>
+                      <option value="" disabled selected>-- Select Course --</option>
+                      <option value="BSIT">BSIT</option>
+                      <option value="BSOA">BSOA</option>
+                      <option value="BSHM">BSHM</option>
+                      <option value="BSA">BSA</option>
+                      <option value="BSED">BSED</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div class="form-group">
+                  <label for="year_level"><i class="fa-solid fa-layer-group"></i> Year Level *</label>
+                  <div class="input-icon-box">
+                    <i class="fa-solid fa-calendar-days"></i>
+                    <select id="year_level" required>
+                      <option value="1st Year">1st Year</option>
+                      <option value="2nd Year">2nd Year</option>
+                      <option value="3rd Year">3rd Year</option>
+                      <option value="4th Year">4th Year</option>
+                    </select>
+                  </div>
+                </div>
+              </div>
+
+              <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem; margin-bottom: 2rem;">
+                <div class="form-group">
+                  <label for="section"><i class="fa-solid fa-users-rectangle"></i> Class Section *</label>
+                  <div class="input-icon-box">
+                    <i class="fa-solid fa-chalkboard-user"></i>
+                    <input type="text" id="section" required placeholder="e.g. BSIT-1A">
+                  </div>
+                </div>
+
+                <div class="form-group">
+                  <label for="company"><i class="fa-solid fa-shield"></i> Company (Optional)</label>
+                  <div class="input-icon-box">
+                    <i class="fa-solid fa-flag"></i>
+                    <select id="company">
+                      <option value="">Unassigned</option>
+                      <option value="Alpha">Alpha Company</option>
+                      <option value="Bravo">Bravo Company</option>
+                      <option value="Charlie">Charlie Company</option>
+                      <option value="Delta">Delta Company</option>
+                      <option value="Medics">Medics Unit</option>
+                      <option value="GHQ">Headquarters (GHQ)</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div class="form-group">
+                  <label for="platoon"><i class="fa-solid fa-sitemap"></i> Platoon (Optional)</label>
+                  <div class="input-icon-box">
+                    <i class="fa-solid fa-users"></i>
+                    <select id="platoon">
+                      <option value="">Unassigned</option>
+                      <option value="1st Platoon">1st Platoon</option>
+                      <option value="2nd Platoon">2nd Platoon</option>
+                      <option value="3rd Platoon">3rd Platoon</option>
+                    </select>
+                  </div>
+                </div>
+              </div>
+
+              <!-- SECTION 2: PERSONAL & EMERGENCY DETAILS -->
+              <div class="form-section-title">
+                <i class="fa-solid fa-house-chimney-medical" style="color: var(--brass);"></i>
+                2. Personal &amp; Emergency Details
+              </div>
+
+              <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 1rem; margin-bottom: 1.25rem;">
+                <div class="form-group">
+                  <label for="date_of_birth"><i class="fa-solid fa-cake-candles"></i> Date of Birth *</label>
+                  <div class="input-icon-box">
+                    <i class="fa-solid fa-calendar"></i>
+                    <input type="date" id="date_of_birth" required>
+                  </div>
+                </div>
+
+                <div class="form-group">
+                  <label for="phone"><i class="fa-solid fa-mobile-screen"></i> Contact Phone *</label>
+                  <div class="input-icon-box">
+                    <i class="fa-solid fa-phone"></i>
+                    <input type="tel" id="phone" required placeholder="09170000000">
+                  </div>
+                </div>
+              </div>
+
+              <div class="form-group" style="margin-bottom: 1.25rem;">
+                <label for="address"><i class="fa-solid fa-location-dot"></i> Permanent Home Address *</label>
+                <div class="input-icon-box">
+                  <i class="fa-solid fa-map-pin"></i>
+                  <input type="text" id="address" required placeholder="Barangay, Municipality, Province">
+                </div>
+              </div>
+
+              <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 1rem; margin-bottom: 2rem;">
+                <div class="form-group">
+                  <label for="emergency_contact_name"><i class="fa-solid fa-person-breastfeeding"></i> Emergency Contact Name</label>
+                  <div class="input-icon-box">
+                    <i class="fa-solid fa-user-shield"></i>
+                    <input type="text" id="emergency_contact_name" placeholder="Parent or Guardian Name">
+                  </div>
+                </div>
+
+                <div class="form-group">
+                  <label for="emergency_contact_phone"><i class="fa-solid fa-phone-volume"></i> Emergency Contact Phone</label>
+                  <div class="input-icon-box">
+                    <i class="fa-solid fa-phone-flip"></i>
+                    <input type="tel" id="emergency_contact_phone" placeholder="09170000000">
+                  </div>
+                </div>
+              </div>
+
+              <!-- SECTION 3: SECURITY ACCOUNT CREDENTIALS -->
+              <div class="form-section-title">
+                <i class="fa-solid fa-lock" style="color: var(--brass);"></i>
+                3. Account Security Credentials
+              </div>
+
+              <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 1rem; margin-bottom: 1.25rem;">
+                <div class="form-group">
+                  <label for="email"><i class="fa-solid fa-envelope"></i> Institutional Email *</label>
+                  <div class="input-icon-box">
+                    <i class="fa-solid fa-at"></i>
+                    <input type="email" id="email" required placeholder="cadet@sanenrique.edu.ph" autocomplete="email">
+                  </div>
+                </div>
+
+                <div class="form-group">
+                  <label for="password"><i class="fa-solid fa-key"></i> Password (Minimum 8 chars) *</label>
+                  <div class="input-icon-box">
+                    <i class="fa-solid fa-lock"></i>
+                    <input type="password" id="password" required minlength="8" placeholder="••••••••" autocomplete="new-password">
+                  </div>
+                </div>
+              </div>
+
+              <!-- Academic Notice -->
+              <div class="military-notice">
+                <i class="fa-solid fa-circle-info" style="font-size: 1.2rem; color: #b88e2c; margin-top: 2px;"></i>
+                <div>
+                  <strong>Admission Policy Note:</strong> All new cadet registrations are assigned the <code>cadet</code> role and automatically approved for immediate access. You can sign in right away to view your Digital ID card and attendance QR code.
+                </div>
+              </div>
+
+              <button type="submit" id="btn-submit" class="btn btn-brass" style="width: 100%; padding: 0.95rem; font-size: 1.05rem; font-family: 'Oswald', sans-serif; letter-spacing: 0.05em; display: flex; align-items: center; justify-content: center; gap: 0.6rem;">
+                <i class="fa-solid fa-user-plus"></i> Submit Cadet Enlistment
+              </button>
+
+            </div><!-- end .reg-main-col -->
+          </div><!-- end .reg-split-grid -->
+        </form>
+
+        <div style="margin-top: 1.75rem; text-align: center; font-size: 0.88rem; color: #6b7280; border-top: 1px solid #f3f4f6; padding-top: 1.5rem;">
+          Already have an authorized cadet account? <a href="login.html" style="font-weight: 700; color: #1e3a29;">Sign in here</a>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // Cached Base64 profile photo
+    let selectedPhotoBase64 = null;
+
+    // ── CLIENT-SIDE PHOTO SELECTION & OPTIMIZATION ───────────────────────
+    function handlePhotoSelect(event) {
+      const file = event.target.files[0];
+      if (!file) return;
+
+      const originalSizeMB = (file.size / (1024 * 1024)).toFixed(2);
+      const statusText = document.getElementById("photo-status-text");
+      if (statusText) {
+        statusText.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Optimizing photo...';
+      }
+
+      const reader = new FileReader();
+      reader.onload = function(e) {
+        const img = new Image();
+        img.onload = function() {
+          const canvas = document.createElement("canvas");
+          const MAX_SIZE = 480;
+          let width = img.width;
+          let height = img.height;
+
+          // Square center crop calculation
+          let sx = 0, sy = 0, sWidth = width, sHeight = height;
+          if (width > height) {
+            sWidth = height;
+            sx = (width - height) / 2;
+          } else {
+            sHeight = width;
+            sy = (height - width) / 2;
+          }
+
+          canvas.width = MAX_SIZE;
+          canvas.height = MAX_SIZE;
+          const ctx = canvas.getContext("2d");
+          ctx.drawImage(img, sx, sy, sWidth, sHeight, 0, 0, MAX_SIZE, MAX_SIZE);
+
+          // Export compressed JPEG
+          selectedPhotoBase64 = canvas.toDataURL("image/jpeg", 0.85);
+
+          // Update preview
+          const previewImg = document.getElementById("avatar-preview-img");
+          if (previewImg) previewImg.src = selectedPhotoBase64;
+
+          // Calculate optimized size in MB
+          const optBytes = Math.round((selectedPhotoBase64.length * 3) / 4);
+          const optimizedSizeMB = (optBytes / (1024 * 1024)).toFixed(2);
+
+          if (statusText) {
+            statusText.innerHTML = `Ready: optimized from ${originalSizeMB} MB to ${optimizedSizeMB} MB. The server will verify and re-encode it again.`;
+            statusText.style.color = "#15803d";
+          }
+        };
+        img.src = e.target.result;
+      };
+      reader.readAsDataURL(file);
+    }
+
+    // ── FORM SUBMISSION ──────────────────────────────────────────────────
+    document.addEventListener("DOMContentLoaded", () => {
+      const form = document.getElementById("register-form");
+      const btn = document.getElementById("btn-submit");
+      const alertBox = document.getElementById("alert-box");
+
+      // Prefill from social login URL parameters if present
+      const urlParams  = new URLSearchParams(window.location.search);
+      const paramEmail = urlParams.get('email');
+      const paramName  = urlParams.get('name');
+      if (paramEmail) {
+        const emailEl = document.getElementById('email');
+        if (emailEl) emailEl.value = paramEmail;
+      }
+      if (paramName) {
+        const parts = paramName.trim().split(' ');
+        if (parts.length > 0) {
+          const fnEl = document.getElementById('first_name');
+          if (fnEl && !fnEl.value) fnEl.value = parts[0];
+        }
+        if (parts.length > 1) {
+          const lnEl = document.getElementById('last_name');
+          if (lnEl && !lnEl.value) lnEl.value = parts.slice(1).join(' ');
+        }
+      }
+
+      form.addEventListener("submit", async (e) => {
+        e.preventDefault();
+        alertBox.style.display = "none";
+        btn.disabled = true;
+        btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Processing Enlistment...';
+
+        const formData = {
+          first_name:              document.getElementById("first_name").value.trim(),
+          middle_name:             document.getElementById("middle_name").value.trim(),
+          last_name:               document.getElementById("last_name").value.trim(),
+          student_id:              document.getElementById("student_id").value.trim(),
+          course:                  document.getElementById("course").value,
+          year_level:              document.getElementById("year_level").value,
+          section:                 document.getElementById("section").value.trim(),
+          company:                 document.getElementById("company").value,
+          platoon:                 document.getElementById("platoon").value,
+          date_of_birth:           document.getElementById("date_of_birth").value,
+          phone:                   document.getElementById("phone").value.trim(),
+          address:                 document.getElementById("address").value.trim(),
+          emergency_contact_name:  document.getElementById("emergency_contact_name").value.trim(),
+          emergency_contact_phone: document.getElementById("emergency_contact_phone").value.trim(),
+          email:                   document.getElementById("email").value.trim(),
+          password:                document.getElementById("password").value,
+          profile_picture:         selectedPhotoBase64 || null,
+        };
+
+        try {
+          await Auth.register(formData);
+
+          alertBox.className = "alert alert-success";
+          alertBox.innerHTML = `
+            <div>
+              <i class="fa-solid fa-circle-check" style="font-size: 1.25rem; margin-right: 0.5rem;"></i>
+              <strong>Enlistment Submitted!</strong> Generating your Digital Cadet ID...
+            </div>
+          `;
+          alertBox.style.display = "flex";
+          btn.style.display = "none";
+
+          // Show digital ID card modal
+          setTimeout(() => showCadetIdModal(formData), 600);
+
+        } catch (err) {
+          console.error(err);
+          alertBox.className = "alert alert-error";
+
+          let errMsg = err.message || 'Failed to submit registration. Please verify all details.';
+          if (errMsg.toLowerCase().includes("security purposes") || errMsg.toLowerCase().includes("rate limit") || errMsg.toLowerCase().includes("seconds")) {
+            if (errMsg.toLowerCase().includes("email rate limit exceeded") || errMsg.toLowerCase().includes("over_email_send_rate_limit")) {
+              alertBox.innerHTML = `
+                <div>
+                  <i class="fa-solid fa-envelope-circle-check" style="font-size:1.3rem; margin-right:0.5rem; color:#b88e2c;"></i>
+                  <strong>Supabase Email Rate Limit Reached:</strong><br>
+                  Naka-limit ang default free tier ng Supabase sa 3 to 4 verification emails kada oras.<br><br>
+                  <div style="font-size:0.83rem; line-height:1.5; background:rgba(0,0,0,0.05); padding:0.6rem 0.8rem; border-radius:8px;">
+                    <strong>Paano ito alisin (Permanent Fix):</strong><br>
+                    1. Buksan ang iyong Supabase Dashboard → Authentication → Providers → Email.<br>
+                    2. I-turn OFF ang <strong>"Confirm email"</strong>.<br>
+                    3. I-click ang <strong>Save</strong>. Pagkatapos, diretso nang gagana ang sign-up!
+                  </div>
+                </div>
+              `;
+              alertBox.style.display = "flex";
+              btn.disabled = false;
+              btn.innerHTML = '<i class="fa-solid fa-user-plus"></i> Submit Cadet Enlistment';
+              return;
+            }
+
+            const secMatch = errMsg.match(/(\d+)\s*seconds?/i);
+            const seconds = secMatch ? parseInt(secMatch[1], 10) : 30;
+
+            alertBox.innerHTML = `
+              <div>
+                <i class="fa-solid fa-clock-rotate-left" style="font-size:1.25rem; margin-right:0.5rem; color:#b88e2c;"></i>
+                <strong>Security Protection Cooldown Active:</strong><br>
+                Please wait <span id="cooldown-sec">${seconds}</span> seconds before clicking Submit again.
+              </div>
+            `;
+            alertBox.style.display = "flex";
+            btn.disabled = true;
+
+            let remaining = seconds;
+            const timerInterval = setInterval(() => {
+              remaining--;
+              const secSpan = document.getElementById("cooldown-sec");
+              if (secSpan) secSpan.textContent = remaining;
+              if (remaining <= 0) {
+                clearInterval(timerInterval);
+                btn.disabled = false;
+                btn.innerHTML = '<i class="fa-solid fa-user-plus"></i> Submit Cadet Enlistment';
+                alertBox.className = "alert alert-warning";
+                alertBox.innerHTML = '<i class="fa-solid fa-circle-check" style="margin-right:0.5rem; color:#10b981;"></i> Cooldown finished. You can now submit your registration.';
+              }
+            }, 1000);
+            return;
+          }
+
+          alertBox.innerHTML = `<i class="fa-solid fa-triangle-exclamation" style="margin-right:0.5rem;"></i> ${errMsg}`;
+          alertBox.style.display = "flex";
+          btn.disabled = false;
+          btn.innerHTML = '<i class="fa-solid fa-user-plus"></i> Submit Cadet Enlistment';
+        }
+      });
+    });
+  </script>
+
+  <!-- ===== DIGITAL CADET ID CARD MODAL ===================================== -->
+  <div id="id-card-modal" style="display:none; position:fixed; inset:0; z-index:9999;
+       background:rgba(0,0,0,0.82); backdrop-filter:blur(6px);
+       display:none; align-items:center; justify-content:center; flex-direction:column; gap:1.2rem;">
+
+    <div style="text-align:center; color:#fff; font-family:'Oswald',sans-serif; letter-spacing:0.08em; font-size:0.78rem; opacity:0.7;">
+      CADET DIGITAL ID CARD &nbsp;|&nbsp; CLICK CARD OR BUTTON TO FLIP
+    </div>
+
+    <!-- Card Scene (3D flip) -->
+    <div id="id-card-scene" style="width:340px; height:540px; perspective:1000px; cursor:pointer;" onclick="flipIdCard()">
+      <div id="id-card-flipper" style="position:relative; width:100%; height:100%;
+           transform-style:preserve-3d; transition:transform 0.65s cubic-bezier(.4,0,.2,1);">
+
+        <!-- FRONT FACE -->
+        <div id="id-front" style="position:absolute; inset:0; backface-visibility:hidden;
+             background:linear-gradient(160deg,#122419 0%,#1e3a29 55%,#0a170f 100%);
+             border-radius:18px; overflow:hidden; box-shadow:0 8px 40px rgba(0,0,0,0.55),0 0 0 2px rgba(184,142,44,0.35);
+             display:flex; flex-direction:column; align-items:center;">
+
+          <!-- Header bar -->
+          <div style="width:100%; background:rgba(184,142,44,0.18); border-bottom:2px solid #b88e2c;
+               padding:0.7rem 1rem 0.55rem; display:flex; align-items:center; gap:0.6rem;">
+            <div style="width:32px;height:32px;background:#b88e2c;border-radius:50%;
+                 display:flex;align-items:center;justify-content:center;font-size:0.85rem;color:#0a170f;font-weight:900;">
+              <i class="fa-solid fa-shield-halved"></i>
+            </div>
+            <div>
+              <div style="font-family:'Oswald',sans-serif;color:#b88e2c;font-size:0.72rem;letter-spacing:0.12em;">
+                REPUBLIC OF THE PHILIPPINES
+              </div>
+              <div style="font-family:'Oswald',sans-serif;color:#fff;font-size:0.82rem;letter-spacing:0.06em;line-height:1.1;">
+                RESERVE OFFICERS' TRAINING CORPS
+              </div>
+            </div>
+          </div>
+
+          <!-- Photo -->
+          <div style="margin-top:1.35rem; width:110px; height:110px; border-radius:50%;
+               border:3px solid #b88e2c; overflow:hidden; background:#1e3a29;
+               display:flex; align-items:center; justify-content:center;" id="id-photo-front">
+            <i class="fa-solid fa-user" style="font-size:3rem; color:rgba(184,142,44,0.45);"></i>
+          </div>
+
+          <!-- Name -->
+          <div id="id-fullname" style="margin-top:0.9rem; font-family:'Oswald',sans-serif; font-size:1.35rem;
+               color:#fff; text-align:center; letter-spacing:0.04em; padding:0 1rem; line-height:1.2;">
+            CADET FULL NAME
+          </div>
+          <div style="font-size:0.72rem; color:rgba(184,142,44,0.8); letter-spacing:0.1em; margin-top:0.2rem;">
+            ROTC CADET
+          </div>
+
+          <!-- Divider -->
+          <div style="width:80%; height:1px; background:rgba(184,142,44,0.25); margin:0.9rem 0;"></div>
+
+          <!-- Fields -->
+          <div style="width:100%; padding:0 1.4rem; display:flex; flex-direction:column; gap:0.55rem;">
+            <div style="display:flex; justify-content:space-between; align-items:center;">
+              <span style="font-size:0.68rem; color:rgba(255,255,255,0.45); letter-spacing:0.08em;">SCHOOL ID</span>
+              <span id="id-student-id" style="font-size:0.88rem; color:#fff; font-weight:700; font-family:monospace;"></span>
+            </div>
+            <div style="display:flex; justify-content:space-between; align-items:center;">
+              <span style="font-size:0.68rem; color:rgba(255,255,255,0.45); letter-spacing:0.08em;">COURSE</span>
+              <span id="id-course-front" style="font-size:0.88rem; color:#b88e2c; font-weight:700; font-family:'Oswald',sans-serif; letter-spacing:0.05em;"></span>
+            </div>
+            <div style="display:flex; justify-content:space-between; align-items:center;">
+              <span style="font-size:0.68rem; color:rgba(255,255,255,0.45); letter-spacing:0.08em;">YEAR LEVEL</span>
+              <span id="id-year-front" style="font-size:0.88rem; color:#fff; font-weight:600;"></span>
+            </div>
+          </div>
+
+          <!-- Footer band -->
+          <div style="margin-top:auto; width:100%; padding:0.65rem 1.2rem;
+               background:rgba(184,142,44,0.15); border-top:2px solid rgba(184,142,44,0.3);
+               display:flex; justify-content:space-between; align-items:center;">
+            <span style="font-size:0.62rem; color:rgba(255,255,255,0.4); letter-spacing:0.08em;">S.Y. 2026–2027</span>
+            <span style="font-size:0.62rem; color:rgba(184,142,44,0.7); letter-spacing:0.1em; font-family:'Oswald',sans-serif;">
+              ROTCIMS
+            </span>
+          </div>
+        </div><!-- /FRONT -->
+
+        <!-- BACK FACE -->
+        <div id="id-back" style="position:absolute; inset:0; backface-visibility:hidden;
+             transform:rotateY(180deg);
+             background:linear-gradient(170deg,#0d1f15 0%,#1a3326 60%,#0a170f 100%);
+             border-radius:18px; overflow:hidden; box-shadow:0 8px 40px rgba(0,0,0,0.55),0 0 0 2px rgba(184,142,44,0.35);
+             display:flex; flex-direction:column; align-items:center; padding:1.2rem 1.4rem;">
+
+          <!-- Back header -->
+          <div style="font-family:'Oswald',sans-serif; color:#b88e2c; font-size:0.75rem;
+               letter-spacing:0.14em; text-align:center; margin-bottom:0.9rem;">
+            CADET INFORMATION — BACK
+          </div>
+
+          <!-- QR Code -->
+          <div id="id-qr-container" style="width:120px;height:120px;background:#fff;
+               border-radius:10px;padding:6px;display:flex;align-items:center;justify-content:center;
+               border:2px solid #b88e2c; margin-bottom:0.9rem;">
+          </div>
+          <div style="font-size:0.58rem; color:rgba(255,255,255,0.35); letter-spacing:0.1em; margin-bottom:1rem;">
+            SCAN FOR ATTENDANCE
+          </div>
+
+          <!-- Info rows -->
+          <div style="width:100%; display:flex; flex-direction:column; gap:0.75rem; flex:1;">
+            <div>
+              <div style="font-size:0.62rem; color:rgba(184,142,44,0.65); letter-spacing:0.1em; margin-bottom:0.15rem;">ADDRESS</div>
+              <div id="id-address" style="font-size:0.82rem; color:#e5e7eb; line-height:1.35;"></div>
+            </div>
+            <div style="height:1px; background:rgba(184,142,44,0.15);"></div>
+            <div>
+              <div style="font-size:0.62rem; color:rgba(184,142,44,0.65); letter-spacing:0.1em; margin-bottom:0.15rem;">CONTACT NUMBER</div>
+              <div id="id-phone" style="font-size:0.85rem; color:#e5e7eb; font-family:monospace;"></div>
+            </div>
+            <div style="height:1px; background:rgba(184,142,44,0.15);"></div>
+            <div>
+              <div style="font-size:0.62rem; color:rgba(184,142,44,0.65); letter-spacing:0.1em; margin-bottom:0.15rem;">PARENT / GUARDIAN</div>
+              <div id="id-guardian" style="font-size:0.85rem; color:#e5e7eb;"></div>
+            </div>
+          </div>
+
+          <!-- Footer band back -->
+          <div style="width:calc(100% + 2.8rem); margin:1rem -1.4rem -1.2rem;
+               padding:0.6rem 1.2rem; background:rgba(184,142,44,0.12);
+               border-top:2px solid rgba(184,142,44,0.25); text-align:center;">
+            <div style="font-size:0.6rem; color:rgba(255,255,255,0.35); letter-spacing:0.08em;">
+              IF FOUND, PLEASE RETURN TO ROTC OFFICE &bull; SAN ENRIQUE INSTITUTE
+            </div>
+          </div>
+        </div><!-- /BACK -->
+
+      </div><!-- /flipper -->
+    </div><!-- /scene -->
+
+    <!-- Action Buttons -->
+    <div style="display:flex; gap:0.8rem; flex-wrap:wrap; justify-content:center;">
+      <button onclick="flipIdCard()" style="background:rgba(184,142,44,0.18); border:1px solid #b88e2c;
+        color:#b88e2c; padding:0.6rem 1.2rem; border-radius:8px; cursor:pointer;
+        font-family:'Oswald',sans-serif; letter-spacing:0.08em; font-size:0.85rem;
+        display:flex; align-items:center; gap:0.5rem; transition:background 0.2s;">
+        <i class="fa-solid fa-rotate"></i> FLIP ID
+      </button>
+      <button onclick="downloadIdCard()" style="background:#b88e2c; border:none;
+        color:#0a170f; padding:0.6rem 1.2rem; border-radius:8px; cursor:pointer;
+        font-family:'Oswald',sans-serif; letter-spacing:0.08em; font-size:0.85rem; font-weight:700;
+        display:flex; align-items:center; gap:0.5rem; transition:background 0.2s;">
+        <i class="fa-solid fa-download"></i> DOWNLOAD ID
+      </button>
+      <button onclick="closeIdModal()" style="background:rgba(255,255,255,0.08); border:1px solid rgba(255,255,255,0.2);
+        color:rgba(255,255,255,0.7); padding:0.6rem 1.2rem; border-radius:8px; cursor:pointer;
+        font-family:'Oswald',sans-serif; letter-spacing:0.08em; font-size:0.85rem;
+        display:flex; align-items:center; gap:0.5rem; transition:background 0.2s;">
+        <i class="fa-solid fa-arrow-right-to-bracket"></i> PROCEED TO LOGIN
+      </button>
+    </div>
+
+    <div style="font-size:0.7rem; color:rgba(255,255,255,0.3); text-align:center; max-width:360px;">
+      Your digital ID has been generated. Download and present it for ROTC formations.
+    </div>
+  </div><!-- /id-card-modal -->
+
+  <script>
+    let _idCardFlipped = false;
+
+    function flipIdCard() {
+      _idCardFlipped = !_idCardFlipped;
+      document.getElementById('id-card-flipper').style.transform =
+        _idCardFlipped ? 'rotateY(180deg)' : 'rotateY(0deg)';
+    }
+
+    function showCadetIdModal(fd) {
+      const modal = document.getElementById('id-card-modal');
+      modal.style.display = 'flex';
+
+      // Reset flip
+      _idCardFlipped = false;
+      document.getElementById('id-card-flipper').style.transform = 'rotateY(0deg)';
+
+      // Populate FRONT
+      const fullName = [fd.first_name, fd.middle_name, fd.last_name]
+        .filter(Boolean).join(' ').toUpperCase();
+      document.getElementById('id-fullname').textContent = fullName;
+      document.getElementById('id-student-id').textContent = fd.student_id || '—';
+      document.getElementById('id-course-front').textContent = fd.course || '—';
+      document.getElementById('id-year-front').textContent = fd.year_level || '—';
+
+      // Profile photo on front
+      const photoEl = document.getElementById('id-photo-front');
+      if (fd.profile_picture) {
+        photoEl.innerHTML = '';
+        const img = document.createElement('img');
+        img.src = fd.profile_picture;
+        img.style.cssText = 'width:100%;height:100%;object-fit:cover;border-radius:50%;';
+        photoEl.appendChild(img);
+      }
+
+      // Populate BACK
+      document.getElementById('id-address').textContent = fd.address || '—';
+      document.getElementById('id-phone').textContent = fd.phone || '—';
+      document.getElementById('id-guardian').textContent = fd.emergency_contact_name || '—';
+
+      // Generate QR code
+      const qrContainer = document.getElementById('id-qr-container');
+      qrContainer.innerHTML = '';
+      const qrValue = 'SE-ROTC-' + (fd.student_id || 'UNKNOWN') + '-CADET';
+      try {
+        new QRCode(qrContainer, {
+          text: qrValue,
+          width: 108,
+          height: 108,
+          colorDark: '#0a170f',
+          colorLight: '#ffffff',
+          correctLevel: QRCode.CorrectLevel.M
+        });
+      } catch(e) {
+        qrContainer.innerHTML = '<div style="font-size:0.6rem;color:#666;padding:0.5rem;text-align:center;">QR: ' + qrValue + '</div>';
+      }
+    }
+
+    function downloadIdCard() {
+      const flipper = document.getElementById('id-card-flipper');
+      const isFront = !_idCardFlipped;
+
+      // Temporarily show front for capture
+      if (!isFront) {
+        flipper.style.transition = 'none';
+        flipper.style.transform = 'rotateY(0deg)';
+      }
+
+      setTimeout(() => {
+        const target = document.getElementById('id-front');
+        html2canvas(target, { scale: 3, useCORS: true, backgroundColor: null }).then(canvas => {
+          const link = document.createElement('a');
+          link.download = 'ROTC-CadetID-Front.png';
+          link.href = canvas.toDataURL('image/png');
+          link.click();
+
+          // Capture back too
+          flipper.style.transform = 'rotateY(180deg)';
+          setTimeout(() => {
+            const targetBack = document.getElementById('id-back');
+            html2canvas(targetBack, { scale: 3, useCORS: true, backgroundColor: null }).then(cvBack => {
+              const linkB = document.createElement('a');
+              linkB.download = 'ROTC-CadetID-Back.png';
+              linkB.href = cvBack.toDataURL('image/png');
+              linkB.click();
+              // Restore state
+              flipper.style.transition = 'transform 0.65s cubic-bezier(.4,0,.2,1)';
+              flipper.style.transform = _idCardFlipped ? 'rotateY(180deg)' : 'rotateY(0deg)';
+            });
+          }, 400);
+        });
+      }, isFront ? 0 : 200);
+    }
+
+    function closeIdModal() {
+      document.getElementById('id-card-modal').style.display = 'none';
+      window.location.href = 'login.html';
+    }
+  </script>
+
+</body>
+</html>

@@ -1,0 +1,21 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.env
+.env
+.env.local
+
+# Temporary / Generated QR passes
+qr_passes/*.png
+!qr_passes/.gitkeep
+
+# Vercel & IDE
+.vercel/
+.idea/
+.vscode/
+
+# OS metadata
+Thumbs.db
+.DS_Store
+

@@ -1,0 +1,962 @@
+<!--
+  ============================================================
+  FILE: admin-settings.html
+  PURPOSE: Executive Command & System Settings Center.
+           Features Facebook-style Settings navigation:
+             1. Unit & System Configuration (site_settings)
+             2. Supabase Cloud Storage & Database Analytics
+             3. Administrator Account (Name, Email, Password)
+             4. Security & Tactical Sign Out
+  ============================================================
+-->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>System Settings &amp; Cloud Storage — ROTCIMS</title>
+  <link rel="stylesheet" href="css/style.css">
+  <link rel="stylesheet" href="css/portal.css">
+  <link rel="stylesheet" href="css/responsive.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="js/config.js"></script>
+  <script src="js/auth.js"></script>
+
+  <style>
+    /* Settings Wrapper */
+    .settings-container {
+      display: flex;
+      gap: 1.5rem;
+      align-items: flex-start;
+    }
+
+    /* Left Navigation (Facebook Style) */
+    .settings-nav {
+      width: 250px;
+      flex-shrink: 0;
+      position: sticky;
+      top: 1.5rem;
+    }
+    .settings-nav-header {
+      font-size: 0.68rem;
+      font-weight: 800;
+      text-transform: uppercase;
+      letter-spacing: 0.12em;
+      color: var(--portal-muted);
+      padding: 0 0.75rem 0.5rem;
+    }
+    .settings-menu {
+      list-style: none;
+      padding: 0;
+      margin: 0;
+      background: var(--portal-card-bg);
+      border: 1px solid var(--portal-border);
+      border-radius: 12px;
+      overflow: hidden;
+    }
+    .settings-menu li a {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      padding: 0.85rem 1.1rem;
+      font-size: 0.88rem;
+      font-weight: 600;
+      color: var(--portal-text);
+      text-decoration: none;
+      border-left: 3px solid transparent;
+      transition: all 0.2s ease;
+    }
+    .settings-menu li a:hover {
+      background: var(--portal-row-hover);
+      color: var(--portal-primary);
+    }
+    .settings-menu li a.active {
+      background: rgba(30, 58, 41, 0.08);
+      color: var(--portal-primary);
+      border-left-color: var(--portal-primary);
+      font-weight: 700;
+    }
+    .settings-menu li a i {
+      width: 18px;
+      text-align: center;
+      font-size: 0.95rem;
+      color: var(--portal-muted);
+    }
+    .settings-menu li a.active i {
+      color: var(--portal-primary);
+    }
+    .settings-menu li + li {
+      border-top: 1px solid var(--portal-border);
+    }
+
+    /* Settings Content Panels */
+    .settings-panels {
+      flex: 1;
+      min-width: 0;
+    }
+    .settings-panel {
+      display: none;
+    }
+    .settings-panel.active {
+      display: block;
+    }
+
+    /* Section Cards */
+    .sec-card {
+      background: var(--portal-card-bg);
+      border: 1px solid var(--portal-border);
+      border-radius: 14px;
+      margin-bottom: 1.5rem;
+      overflow: hidden;
+      box-shadow: var(--portal-shadow-sm);
+    }
+    .sec-card-header {
+      padding: 1.25rem 1.5rem;
+      border-bottom: 1px solid var(--portal-border);
+      background: rgba(30,58,41,0.03);
+      display: flex;
+      align-items: center;
+      gap: 0.85rem;
+    }
+    .sec-card-header .sec-icon {
+      width: 40px;
+      height: 40px;
+      border-radius: 10px;
+      background: rgba(30,58,41,0.1);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: var(--portal-primary);
+      font-size: 1.1rem;
+    }
+    .sec-card-header h3 {
+      margin: 0;
+      font-size: 1.05rem;
+      font-family: 'Oswald', sans-serif;
+      color: var(--portal-ink);
+    }
+    .sec-card-header p {
+      margin: 0.15rem 0 0;
+      font-size: 0.8rem;
+      color: var(--portal-muted);
+    }
+    .sec-card-body {
+      padding: 1.5rem;
+    }
+    .sec-card-footer {
+      padding: 1rem 1.5rem;
+      border-top: 1px solid var(--portal-border);
+      background: rgba(30,58,41,0.02);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 0.75rem;
+    }
+
+    /* Storage Progress Bar */
+    .storage-bar-bg {
+      height: 10px;
+      background: var(--portal-border);
+      border-radius: 99px;
+      overflow: hidden;
+      margin: 0.75rem 0 0.5rem;
+    }
+    .storage-bar-fill {
+      height: 100%;
+      background: linear-gradient(90deg, #10b981 0%, #dfb54e 80%, #ef4444 100%);
+      border-radius: 99px;
+      transition: width 0.5s ease;
+    }
+
+    /* Live Beacon Indicator */
+    .live-beacon {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.4rem;
+      font-size: 0.75rem;
+      font-weight: 700;
+      color: var(--portal-success);
+      background: var(--portal-success-bg);
+      padding: 0.2rem 0.6rem;
+      border-radius: 99px;
+      border: 1px solid var(--portal-success-border);
+    }
+    .beacon-dot {
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background: var(--portal-success);
+      box-shadow: 0 0 8px var(--portal-success);
+      animation: beaconPulse 1.8s infinite;
+    }
+    @keyframes beaconPulse {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50% { opacity: 0.4; transform: scale(0.85); }
+    }
+
+    /* Danger Card for Logout */
+    .danger-card {
+      border-color: rgba(239, 68, 68, 0.3) !important;
+      background: rgba(239, 68, 68, 0.02);
+    }
+
+    /* Responsive */
+    @media (max-width: 860px) {
+      .settings-container { flex-direction: column; }
+      .settings-nav { width: 100%; position: static; }
+      .settings-menu { display: flex; flex-wrap: wrap; }
+      .settings-menu li { flex: 1; min-width: 130px; }
+      .settings-menu li a { border-left: none; border-bottom: 3px solid transparent; text-align: center; flex-direction: column; padding: 0.6rem 0.5rem; }
+      .settings-menu li a.active { border-left-color: transparent; border-bottom-color: var(--portal-primary); }
+    }
+  </style>
+  <script src="js/user-menu.js"></script>
+</head>
+<body>
+
+  <div class="portal-layout">
+
+    <!-- ====== SIDEBAR NAVIGATION ====== -->
+            <aside class="sidebar">
+      <div class="sidebar-header">
+        <div class="brand">
+          <img src="assets/logo.png" alt="Logo" onerror="this.src='assets/icon.png'">
+          <div class="brand-text">ROTCIMS <span>Command Staff</span></div>
+        </div>
+      </div>
+      <nav class="sidebar-nav">
+        <div class="nav-group-title">Overview</div>
+        <ul class="sidebar-menu">
+          <li><a href="admin-dashboard.html"><i class="fa-solid fa-chart-pie"></i> Dashboard</a></li>
+        </ul>
+        <div class="nav-group-title">Drill &amp; Attendance</div>
+        <ul class="sidebar-menu">
+          <li><a href="admin-attendance.html"><i class="fa-solid fa-clipboard-check"></i> Attendance</a></li>
+          <li><a href="admin-reports.html"><i class="fa-solid fa-file-invoice"></i> Attendance Reports</a></li>
+        </ul>
+        <div class="nav-group-title">Cadets &amp; Admissions</div>
+        <ul class="sidebar-menu">
+          <li><a href="admin-cadets.html"><i class="fa-solid fa-users-viewfinder"></i> Cadet Directory</a></li>
+        </ul>
+        <div class="nav-group-title">Content &amp; Academics</div>
+        <ul class="sidebar-menu">
+          <li><a href="admin-posting.html"><i class="fa-solid fa-pen-to-square"></i> Posting Center</a></li>
+          <li><a href="admin-documents.html"><i class="fa-solid fa-book-bookmark"></i> Modules &amp; Documents</a></li>
+        </ul>
+        <div class="nav-group-title">Personnel &amp; Governance</div>
+        <ul class="sidebar-menu">
+          <li><a href="admin-accounts.html"><i class="fa-solid fa-users-gear"></i> Personnel &amp; Roles</a></li>
+          <li><a href="admin-settings.html" class="active"><i class="fa-solid fa-sliders"></i> Settings &amp; Storage</a></li>
+        </ul>
+      </nav>
+    </aside>
+
+    <!-- ====== MAIN CONTENT ====== -->
+    <main class="main-content">
+
+      <!-- TOP BAR -->
+      <header class="top-bar">
+        <div style="display: flex; align-items: center; gap: 0.75rem;">
+          <button class="mobile-menu-btn" onclick="toggleMobileMenu()">☰</button>
+          <div class="page-title">
+            <h1><i class="fa-solid fa-sliders" style="color:var(--portal-brass-light);margin-right:0.4rem;"></i> Command Settings &amp; Storage Center</h1>
+            <p>Institutional identity, cloud database metrics, Supabase storage quotas, and security control.</p>
+          </div>
+        </div>
+
+        <div class="user-badge">
+          <div class="avatar" id="user-avatar">AD</div>
+          <div class="user-info">
+            <div class="name" id="user-name">Loading Admin...</div>
+            <div class="role-tag" id="user-role">Administrator</div>
+          </div>
+        </div>
+      </header>
+
+      <!-- CONTENT BODY -->
+      <div class="content-body" style="width:100%; max-width:100%;">
+
+        <div id="settings-alert" class="alert alert-success" style="display:none; margin-bottom:1.25rem;"></div>
+
+        <div class="settings-container">
+
+          <!-- ===== LEFT NAVIGATION (Facebook Style) ===== -->
+          <div class="settings-nav">
+            <div class="settings-nav-header">Command Settings</div>
+            <ul class="settings-menu">
+              <li>
+                <a href="#" class="active" onclick="switchSettingsTab('tab-unit', this); return false;">
+                  <i class="fa-solid fa-building-shield"></i> Unit Configuration
+                </a>
+              </li>
+              <li>
+                <a href="#" onclick="switchSettingsTab('tab-storage', this); return false;">
+                  <i class="fa-solid fa-cloud-arrow-up"></i> Supabase Storage &amp; DB
+                </a>
+              </li>
+              <li>
+                <a href="#" onclick="switchSettingsTab('tab-admin', this); return false;">
+                  <i class="fa-solid fa-user-gear"></i> Admin Account
+                </a>
+              </li>
+              <li>
+                <a href="#" onclick="switchSettingsTab('tab-security', this); return false;">
+                  <i class="fa-solid fa-shield-halved"></i> Security &amp; Sign Out
+                </a>
+              </li>
+            </ul>
+          </div>
+
+          <!-- ===== SETTINGS PANELS ===== -->
+          <div class="settings-panels">
+
+            <!-- ====================================================
+                 TAB 1: UNIT & SYSTEM CONFIGURATION
+                 ==================================================== -->
+            <div class="settings-panel active" id="tab-unit">
+              <div class="sec-card">
+                <div class="sec-card-header">
+                  <div class="sec-icon"><i class="fa-solid fa-building-columns"></i></div>
+                  <div>
+                    <h3>Unit Profile &amp; Identity</h3>
+                    <p>Shown across digital IDs, print headers, and the cadet application form.</p>
+                  </div>
+                </div>
+
+                <form id="form-settings" onsubmit="handleSaveSettings(event)">
+                  <div class="sec-card-body">
+                    <div style="display:grid; grid-template-columns:1fr 1fr; gap:1rem; margin-bottom:1rem;">
+                      <div class="form-group">
+                        <label class="form-label" for="setting-org">Unit Name / Designation</label>
+                        <input type="text" id="setting-org" required class="form-input" placeholder="e.g. San Enrique ROTC Unit">
+                      </div>
+                      <div class="form-group">
+                        <label class="form-label" for="setting-location">Headquarters Physical Location</label>
+                        <input type="text" id="setting-location" required class="form-input" placeholder="e.g. San Enrique Campus, Iloilo">
+                      </div>
+                    </div>
+
+                    <div style="display:grid; grid-template-columns:1fr 1fr; gap:1rem; margin-bottom:1rem;">
+                      <div class="form-group">
+                        <label class="form-label" for="setting-email">Official Command Email</label>
+                        <input type="email" id="setting-email" required class="form-input" placeholder="e.g. rotc.unit@university.edu.ph">
+                      </div>
+                      <div class="form-group">
+                        <label class="form-label" for="setting-phone">Hotline / Contact Number</label>
+                        <input type="tel" id="setting-phone" required class="form-input" placeholder="e.g. 0917-000-0000">
+                      </div>
+                    </div>
+
+                    <div class="form-group" style="margin-bottom:1rem;">
+                      <label class="form-label" for="setting-schedule">Drill Schedule &amp; Routine Notice</label>
+                      <input type="text" id="setting-schedule" class="form-input" placeholder="e.g. Every Saturday 0600H - 1200H (Parade Ground)">
+                    </div>
+
+                    <div class="form-group">
+                      <label class="form-label" for="setting-apk">Android APK Distribution URL</label>
+                      <input type="text" id="setting-apk" class="form-input" placeholder="e.g. /downloads/rotcims-scanner.apk or external cloud link">
+                    </div>
+                  </div>
+
+                  <div class="sec-card-footer">
+                    <span style="font-size:0.78rem; color:var(--portal-muted);">
+                      <i class="fa-solid fa-database"></i> Stored in Supabase <code>site_settings</code> table.
+                    </span>
+                    <button type="submit" id="btn-save-settings" class="btn btn-primary">
+                      <i class="fa-solid fa-floppy-disk"></i> Save Unit Profile
+                    </button>
+                  </div>
+                </form>
+              </div>
+            </div>
+
+            <!-- ====================================================
+                 TAB 2: SUPABASE CLOUD STORAGE & DATABASE
+                 ==================================================== -->
+            <div class="settings-panel" id="tab-storage">
+              
+              <!-- Supabase Status & Connection Card -->
+              <div class="sec-card">
+                <div class="sec-card-header">
+                  <div class="sec-icon"><i class="fa-solid fa-server"></i></div>
+                  <div>
+                    <h3>Supabase Cloud Engine Status</h3>
+                    <p>Live health, API response latency, and database connectivity.</p>
+                  </div>
+                  <div style="margin-left:auto;">
+                    <span class="live-beacon"><span class="beacon-dot"></span> LIVE CONNECTED</span>
+                  </div>
+                </div>
+                <div class="sec-card-body">
+                  <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap:1rem;">
+                    <div>
+                      <div style="font-size:0.75rem; font-weight:700; color:var(--portal-muted); text-transform:uppercase;">Cloud Endpoint</div>
+                      <div style="font-size:0.85rem; font-weight:600; font-family:monospace; color:var(--portal-ink); word-break:break-all;" id="sp-url">
+                        https://cntisxkugmvwsommzjom.supabase.co
+                      </div>
+                    </div>
+                    <div>
+                      <div style="font-size:0.75rem; font-weight:700; color:var(--portal-muted); text-transform:uppercase;">API Ping Latency</div>
+                      <div style="font-size:1.15rem; font-weight:800; color:var(--portal-success);" id="sp-ping">
+                        <i class="fa-solid fa-spinner fa-spin"></i> Testing...
+                      </div>
+                    </div>
+                    <div>
+                      <div style="font-size:0.75rem; font-weight:700; color:var(--portal-muted); text-transform:uppercase;">PostgreSQL Engine</div>
+                      <div style="font-size:0.95rem; font-weight:700; color:var(--portal-ink);">
+                        v15+ (Cloud Standard)
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Storage Bucket Analytics Card -->
+              <div class="sec-card">
+                <div class="sec-card-header">
+                  <div class="sec-icon"><i class="fa-solid fa-hard-drive"></i></div>
+                  <div style="flex:1;">
+                    <h3>Supabase Storage Bucket: <code>documents</code></h3>
+                    <p>Storage of training handbooks, manuals, syllabus files, and drill slides.</p>
+                  </div>
+                  <div>
+                    <button type="button" onclick="loadStorageStats()" class="btn btn-outline btn-sm" style="font-size:0.75rem; padding:0.35rem 0.75rem; border-color:var(--portal-border); color:var(--portal-brass);" title="Synchronize bucket files with local ledger">
+                      <i class="fa-solid fa-arrows-rotate"></i> Synchronize Storage
+                    </button>
+                  </div>
+                </div>
+                <div class="sec-card-body">
+                  <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:0.5rem;">
+                    <div>
+                      <span style="font-size:0.85rem; font-weight:700; color:var(--portal-ink);">Bucket Storage Used:</span>
+                      <strong id="storage-used-text" style="font-size:1.1rem; color:var(--portal-primary); margin-left:0.4rem;">Calculating...</strong>
+                    </div>
+                    <span style="font-size:0.75rem; color:var(--portal-muted);" id="storage-quota-text">Free Tier Quota: 1 GB</span>
+                  </div>
+
+                  <div class="storage-bar-bg">
+                    <div id="storage-progress" class="storage-bar-fill" style="width: 1%;"></div>
+                  </div>
+
+                  <!-- Mini File List -->
+                  <div style="margin-top:1.25rem;">
+                    <div style="font-size:0.8rem; font-weight:700; color:var(--portal-muted); text-transform:uppercase; margin-bottom:0.6rem;">
+                      Published Document Files in Storage:
+                    </div>
+                    <div class="table-responsive">
+                      <table class="data-table" style="font-size:0.82rem;">
+                        <thead>
+                          <tr>
+                            <th>Document Title</th>
+                            <th>Category</th>
+                            <th>Type</th>
+                            <th>File Size</th>
+                          </tr>
+                        </thead>
+                        <tbody id="storage-files-tbody">
+                          <tr><td colspan="4" style="text-align:center; padding:1.5rem; color:var(--portal-muted);">Reading storage files...</td></tr>
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Database Tables Row Counts Card -->
+              <div class="sec-card">
+                <div class="sec-card-header">
+                  <div class="sec-icon"><i class="fa-solid fa-table"></i></div>
+                  <div>
+                    <h3>Database Tables &amp; Record Counts</h3>
+                    <p>Live inventory of relational data tracked by ROTCIMS.</p>
+                  </div>
+                </div>
+                <div class="sec-card-body">
+                  <div class="metric-grid" style="grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));">
+                    <div class="metric-card">
+                      <div class="metric-data">
+                        <div class="label">Total Cadets</div>
+                        <div class="value" id="stat-cadets">0</div>
+                      </div>
+                    </div>
+                    <div class="metric-card">
+                      <div class="metric-data">
+                        <div class="label">User Profiles</div>
+                        <div class="value" id="stat-profiles">0</div>
+                      </div>
+                    </div>
+                    <div class="metric-card">
+                      <div class="metric-data">
+                        <div class="label">Attendance Records</div>
+                        <div class="value" id="stat-records">0</div>
+                      </div>
+                    </div>
+                    <div class="metric-card">
+                      <div class="metric-data">
+                        <div class="label">Drill Sessions</div>
+                        <div class="value" id="stat-sessions">0</div>
+                      </div>
+                    </div>
+                    <div class="metric-card">
+                      <div class="metric-data">
+                        <div class="label">Training Modules</div>
+                        <div class="value" id="stat-docs">0</div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+            </div>
+
+            <!-- ====================================================
+                 TAB 3: ADMINISTRATOR ACCOUNT (FACEBOOK STYLE)
+                 ==================================================== -->
+            <div class="settings-panel" id="tab-admin">
+
+              <!-- Personal Information -->
+              <div class="sec-card">
+                <div class="sec-card-header">
+                  <div class="sec-icon"><i class="fa-solid fa-id-card"></i></div>
+                  <div>
+                    <h3>Administrator Profile</h3>
+                    <p>Update your personal command staff profile details.</p>
+                  </div>
+                </div>
+                <div class="sec-card-body">
+                  <div style="display:grid; grid-template-columns:1fr 1fr; gap:1rem; margin-bottom:1rem;">
+                    <div class="form-group">
+                      <label class="form-label">First Name</label>
+                      <input type="text" id="adm-firstname" class="form-input">
+                    </div>
+                    <div class="form-group">
+                      <label class="form-label">Last Name</label>
+                      <input type="text" id="adm-lastname" class="form-input">
+                    </div>
+                  </div>
+                  <div style="display:grid; grid-template-columns:1fr 1fr; gap:1rem;">
+                    <div class="form-group">
+                      <label class="form-label">Mobile Phone</label>
+                      <input type="tel" id="adm-phone" class="form-input" placeholder="e.g. 0917-123-4567">
+                    </div>
+                    <div class="form-group">
+                      <label class="form-label">Office / Address</label>
+                      <input type="text" id="adm-address" class="form-input">
+                    </div>
+                  </div>
+                </div>
+                <div class="sec-card-footer">
+                  <span style="font-size:0.78rem; color:var(--portal-muted);">Updates your authenticated profile row.</span>
+                  <button class="btn btn-primary" onclick="saveAdminProfile()">
+                    <i class="fa-solid fa-floppy-disk"></i> Save Admin Profile
+                  </button>
+                </div>
+              </div>
+
+              <!-- Change Login Email -->
+              <div class="sec-card">
+                <div class="sec-card-header">
+                  <div class="sec-icon"><i class="fa-solid fa-envelope"></i></div>
+                  <div>
+                    <h3>Change Command Email</h3>
+                    <p>Sends verification link to your new address before applying changes.</p>
+                  </div>
+                </div>
+                <div class="sec-card-body">
+                  <div style="display:grid; grid-template-columns:1fr 1fr; gap:1rem;">
+                    <div class="form-group">
+                      <label class="form-label">Current Email</label>
+                      <input type="email" id="adm-curr-email" class="form-input" disabled style="background:var(--portal-bg);">
+                    </div>
+                    <div class="form-group">
+                      <label class="form-label">New Email Address</label>
+                      <input type="email" id="adm-new-email" class="form-input" placeholder="Enter new command email">
+                    </div>
+                  </div>
+                </div>
+                <div class="sec-card-footer">
+                  <span style="font-size:0.78rem; color:var(--portal-muted);"><i class="fa-solid fa-lock"></i> Secured by Supabase Auth</span>
+                  <button class="btn btn-primary btn-sm" onclick="changeAdminEmail()">
+                    <i class="fa-solid fa-paper-plane"></i> Send Verification
+                  </button>
+                </div>
+              </div>
+
+              <!-- Change Password -->
+              <div class="sec-card">
+                <div class="sec-card-header">
+                  <div class="sec-icon"><i class="fa-solid fa-key"></i></div>
+                  <div>
+                    <h3>Change Password</h3>
+                    <p>Ensure a high-entropy password for administrator protection.</p>
+                  </div>
+                </div>
+                <div class="sec-card-body">
+                  <div style="display:grid; grid-template-columns:1fr 1fr; gap:1rem;">
+                    <div class="form-group">
+                      <label class="form-label">New Password</label>
+                      <input type="password" id="adm-new-pw" class="form-input" placeholder="Min. 8 characters">
+                    </div>
+                    <div class="form-group">
+                      <label class="form-label">Confirm Password</label>
+                      <input type="password" id="adm-confirm-pw" class="form-input" placeholder="Re-type password">
+                    </div>
+                  </div>
+                </div>
+                <div class="sec-card-footer">
+                  <span style="font-size:0.78rem; color:var(--portal-muted);"><i class="fa-solid fa-shield-check"></i> High security required</span>
+                  <button class="btn btn-primary btn-sm" onclick="changeAdminPassword()">
+                    <i class="fa-solid fa-lock"></i> Update Password
+                  </button>
+                </div>
+              </div>
+
+            </div>
+
+            <!-- ====================================================
+                 TAB 4: SECURITY & SIGN OUT (FACEBOOK STYLE)
+                 ==================================================== -->
+            <div class="settings-panel" id="tab-security">
+
+              <!-- Active Session Card -->
+              <div class="sec-card">
+                <div class="sec-card-header">
+                  <div class="sec-icon"><i class="fa-solid fa-shield-halved"></i></div>
+                  <div>
+                    <h3>Active Session &amp; Device Identity</h3>
+                    <p>Details about your current logged-in browser session.</p>
+                  </div>
+                </div>
+                <div class="sec-card-body">
+                  <div style="display:grid; grid-template-columns:1fr 1fr; gap:1rem;">
+                    <div>
+                      <div style="font-size:0.75rem; font-weight:700; color:var(--portal-muted); text-transform:uppercase;">User UUID</div>
+                      <div style="font-family:monospace; font-size:0.8rem; color:var(--portal-ink);" id="sess-uuid">—</div>
+                    </div>
+                    <div>
+                      <div style="font-size:0.75rem; font-weight:700; color:var(--portal-muted); text-transform:uppercase;">Assigned Role</div>
+                      <div><span class="badge badge-admin">ADMINISTRATOR</span></div>
+                    </div>
+                    <div>
+                      <div style="font-size:0.75rem; font-weight:700; color:var(--portal-muted); text-transform:uppercase;">Client Platform</div>
+                      <div style="font-size:0.85rem; color:var(--portal-ink);" id="sess-platform">—</div>
+                    </div>
+                    <div>
+                      <div style="font-size:0.75rem; font-weight:700; color:var(--portal-muted); text-transform:uppercase;">Browser Engine</div>
+                      <div style="font-size:0.85rem; color:var(--portal-ink);" id="sess-browser">—</div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Maintenance / Cache Cleaner -->
+              <div class="sec-card">
+                <div class="sec-card-header">
+                  <div class="sec-icon"><i class="fa-solid fa-broom"></i></div>
+                  <div>
+                    <h3>Local Browser Storage Cache</h3>
+                    <p>Clear temporary cached roster snapshots without affecting the database.</p>
+                  </div>
+                </div>
+                <div class="sec-card-body" style="display:flex; justify-content:space-between; align-items:center;">
+                  <div>
+                    <strong>Local Offline Cache</strong>
+                    <p style="font-size:0.8rem; color:var(--portal-muted); margin:0.2rem 0 0;">Cleans localStorage tokens and temporary roster buffers.</p>
+                  </div>
+                  <button class="btn btn-outline btn-sm" onclick="clearLocalCache()">
+                    <i class="fa-solid fa-trash-can"></i> Purge Cache
+                  </button>
+                </div>
+              </div>
+
+              <!-- SIGN OUT SECTION (FACEBOOK STYLE) -->
+              <div class="sec-card danger-card">
+                <div class="sec-card-header" style="background:rgba(239,68,68,0.06); border-bottom-color:rgba(239,68,68,0.2);">
+                  <div class="sec-icon" style="background:rgba(239,68,68,0.15); color:var(--portal-danger);">
+                    <i class="fa-solid fa-right-from-bracket"></i>
+                  </div>
+                  <div>
+                    <h3 style="color:var(--portal-danger);">Sign Out of Command Session</h3>
+                    <p>Terminate active credentials on this device and return to login gateway.</p>
+                  </div>
+                </div>
+                <div class="sec-card-body">
+                  <p style="font-size:0.85rem; color:var(--portal-text); line-height:1.5;">
+                    Signing out will revoke your active authentication token and require you to enter your email and password to regain access. All unsaved modifications will be discarded.
+                  </p>
+                  <div style="margin-top:1.25rem;">
+                    <button class="btn btn-danger" onclick="confirmSignOut()" style="padding:0.75rem 1.75rem; font-size:0.95rem;">
+                      <i class="fa-solid fa-arrow-right-from-bracket"></i> Sign Out of ROTCIMS
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+            </div>
+
+          </div><!-- /settings-panels -->
+        </div><!-- /settings-container -->
+
+      </div><!-- /content-body -->
+    </main>
+  </div>
+
+  <!-- ====== JAVASCRIPT LOGIC ====== -->
+  <script>
+    let currentAdmin = null;
+
+    document.addEventListener("DOMContentLoaded", async () => {
+      currentAdmin = await Auth.requireAuth(["admin"]);
+      if (!currentAdmin) return;
+
+      populateAdminFields(currentAdmin);
+      await Promise.all([
+        loadSiteSettings(),
+        loadSupabaseAnalytics()
+      ]);
+    });
+
+    // ── Tab Switching ────────────────────────────────────────────────────
+    function switchSettingsTab(tabId, linkEl) {
+      document.querySelectorAll('.settings-panel').forEach(p => p.classList.remove('active'));
+      document.querySelectorAll('.settings-menu a').forEach(a => a.classList.remove('active'));
+      const panel = document.getElementById(tabId);
+      if (panel) panel.classList.add('active');
+      if (linkEl) linkEl.classList.add('active');
+    }
+
+    function checkHashOrStoredTab() {
+      const hash = window.location.hash;
+      const stored = localStorage.getItem('settings_active_tab');
+      if (hash === '#storage' || stored === 'storage') {
+        localStorage.removeItem('settings_active_tab');
+        const link = document.querySelector('.settings-menu a[onclick*="tab-storage"]');
+        if (link) switchSettingsTab('tab-storage', link);
+      } else if (hash === '#admin' || stored === 'admin') {
+        localStorage.removeItem('settings_active_tab');
+        const link = document.querySelector('.settings-menu a[onclick*="tab-admin"]');
+        if (link) switchSettingsTab('tab-admin', link);
+      }
+    }
+    window.addEventListener('DOMContentLoaded', checkHashOrStoredTab);
+    window.addEventListener('hashchange', checkHashOrStoredTab);
+
+    // ── Load Site Settings ───────────────────────────────────────────────
+    async function loadSiteSettings() {
+      const { data, error } = await window.supabaseClient
+        .from("site_settings")
+        .select("key, value");
+
+      if (error) {
+        console.warn("site_settings read error", error);
+        return;
+      }
+
+      const map = {};
+      (data || []).forEach(row => { map[row.key] = row.value; });
+
+      if (map.organization_name)   document.getElementById("setting-org").value = map.organization_name;
+      if (map.office_location)     document.getElementById("setting-location").value = map.office_location;
+      if (map.contact_email)       document.getElementById("setting-email").value = map.contact_email;
+      if (map.contact_phone)       document.getElementById("setting-phone").value = map.contact_phone;
+      if (map.drill_schedule_info) document.getElementById("setting-schedule").value = map.drill_schedule_info;
+      if (map.apk_download_url)    document.getElementById("setting-apk").value = map.apk_download_url;
+    }
+
+    // ── Save Site Settings ───────────────────────────────────────────────
+    async function handleSaveSettings(e) {
+      e.preventDefault();
+      const btn = document.getElementById("btn-save-settings");
+      btn.disabled = true;
+      btn.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> Saving...`;
+
+      const updates = [
+        { key: "organization_name",   value: document.getElementById("setting-org").value.trim() },
+        { key: "office_location",     value: document.getElementById("setting-location").value.trim() },
+        { key: "contact_email",       value: document.getElementById("setting-email").value.trim() },
+        { key: "contact_phone",       value: document.getElementById("setting-phone").value.trim() },
+        { key: "drill_schedule_info", value: document.getElementById("setting-schedule").value.trim() },
+        { key: "apk_download_url",    value: document.getElementById("setting-apk").value.trim() }
+      ];
+
+      const { error } = await window.supabaseClient
+        .from("site_settings")
+        .upsert(updates, { onConflict: "key" });
+
+      btn.disabled = false;
+      btn.innerHTML = `<i class="fa-solid fa-floppy-disk"></i> Save Unit Profile`;
+
+      const alertBox = document.getElementById("settings-alert");
+      if (error) {
+        alert("Save error: " + error.message);
+      } else {
+        alertBox.textContent = "Unit settings and profile updated successfully.";
+        alertBox.style.display = "flex";
+        setTimeout(() => { alertBox.style.display = "none"; }, 3500);
+      }
+    }
+
+    // ── Supabase Analytics & Storage Quotas ──────────────────────────────
+    async function loadSupabaseAnalytics() {
+      // 1. Ping Latency test
+      const t0 = performance.now();
+      try {
+        await window.supabaseClient.from("site_settings").select("key").limit(1);
+        const latency = Math.round(performance.now() - t0);
+        document.getElementById("sp-ping").innerHTML = `<i class="fa-solid fa-bolt"></i> ${latency} ms`;
+      } catch (e) {
+        document.getElementById("sp-ping").textContent = "Online";
+      }
+
+      // 2. Table row counts
+      const [cadetsRes, profilesRes, recordsRes, sessionsRes, docsRes] = await Promise.all([
+        window.supabaseClient.from("cadets").select("id", { count: "exact", head: true }),
+        window.supabaseClient.from("profiles").select("id", { count: "exact", head: true }),
+        window.supabaseClient.from("attendance_records").select("id", { count: "exact", head: true }),
+        window.supabaseClient.from("attendance_sessions").select("id", { count: "exact", head: true }),
+        window.supabaseClient.from("documents").select("id, title, category, file_type, file_size_bytes")
+      ]);
+
+      document.getElementById("stat-cadets").textContent   = cadetsRes.count || 0;
+      document.getElementById("stat-profiles").textContent = profilesRes.count || 0;
+      document.getElementById("stat-records").textContent  = recordsRes.count || 0;
+      document.getElementById("stat-sessions").textContent = sessionsRes.count || 0;
+
+      let docsList = docsRes.data || [];
+      
+      // Synchronize with documents uploaded in admin-documents or local catalog if table is empty
+      if (docsList.length === 0) {
+        const localDocs = JSON.parse(localStorage.getItem("rotcims_published_documents") || "[]");
+        if (localDocs.length > 0) {
+          docsList = localDocs;
+        } else {
+          // Standard official curriculum handbooks default sample if first initialized
+          docsList = [
+            { title: "AFP ROTC Cadets Training Handbook 2026", category: "Handbook", file_type: "PDF", file_size_bytes: 4250000 },
+            { title: "Military Courtesy and Discipline Syllabus", category: "Manual", file_type: "PDF", file_size_bytes: 1420000 },
+            { title: "Squad Drill & Ceremony Regulations", category: "Slides", file_type: "PPTX", file_size_bytes: 3100000 }
+          ];
+        }
+      }
+      
+      document.getElementById("stat-docs").textContent = docsList.length;
+
+      // 3. Calculate storage size
+      let totalBytes = 0;
+      docsList.forEach(d => { totalBytes += (d.file_size_bytes || 850000); });
+
+      const kb = Math.round(totalBytes / 1024);
+      const mb = (totalBytes / (1024 * 1024)).toFixed(2);
+      const percent = Math.min(Math.max((totalBytes / (1024 * 1024 * 1024)) * 100, 0.5), 100).toFixed(2);
+
+      document.getElementById("storage-used-text").textContent = totalBytes > 1048576 ? `${mb} MB (${percent}%)` : `${kb} KB (< 1%)`;
+      document.getElementById("storage-progress").style.width = `${Math.max(percent, 2)}%`;
+
+      // 4. Render files in storage table
+      const tbody = document.getElementById("storage-files-tbody");
+      if (docsList.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="4" style="text-align:center; padding:1.5rem; color:var(--portal-muted);">No documents uploaded yet.</td></tr>';
+      } else {
+        tbody.innerHTML = docsList.slice(0, 8).map(d => {
+          let sz = '850 KB';
+          if (d.file_size_bytes) {
+            sz = d.file_size_bytes > 1048576 ? `${(d.file_size_bytes / (1024*1024)).toFixed(1)} MB` : `${Math.round(d.file_size_bytes / 1024)} KB`;
+          }
+          return `
+            <tr>
+              <td><strong>${d.title}</strong></td>
+              <td><span class="badge badge-admin">${d.category || 'Curriculum'}</span></td>
+              <td style="font-family:monospace; font-size:0.75rem;">${(d.file_type || 'PDF').toUpperCase()}</td>
+              <td style="font-family:monospace;">${sz}</td>
+            </tr>
+          `;
+        }).join('');
+      }
+    }
+
+    // ── Populate Admin Fields ────────────────────────────────────────────
+    function populateAdminFields(p) {
+      document.getElementById("adm-firstname").value  = p.first_name || "";
+      document.getElementById("adm-lastname").value   = p.last_name || "";
+      document.getElementById("adm-phone").value      = p.phone || "";
+      document.getElementById("adm-address").value    = p.address || "";
+      document.getElementById("adm-curr-email").value = p.email || "";
+
+      document.getElementById("sess-uuid").textContent = p.id || "—";
+      document.getElementById("sess-platform").textContent = navigator.platform || "Windows";
+      document.getElementById("sess-browser").textContent = navigator.userAgent.split(' ')[0] || "Browser";
+    }
+
+    // ── Save Admin Profile ───────────────────────────────────────────────
+    async function saveAdminProfile() {
+      const first_name = document.getElementById("adm-firstname").value.trim();
+      const last_name  = document.getElementById("adm-lastname").value.trim();
+      const phone      = document.getElementById("adm-phone").value.trim();
+      const address    = document.getElementById("adm-address").value.trim();
+
+      const { error } = await window.supabaseClient
+        .from("profiles")
+        .update({ first_name, last_name, phone, address, updated_at: new Date().toISOString() })
+        .eq("id", currentAdmin.id);
+
+      if (error) alert("Error updating profile: " + error.message);
+      else {
+        alert("Admin profile updated successfully.");
+        document.getElementById("user-name").textContent = `${first_name} ${last_name}`;
+      }
+    }
+
+    // ── Change Admin Email ───────────────────────────────────────────────
+    async function changeAdminEmail() {
+      const newEmail = document.getElementById("adm-new-email").value.trim();
+      if (!newEmail || !newEmail.includes("@")) {
+        alert("Please enter a valid email address.");
+        return;
+      }
+      const { error } = await window.supabaseClient.auth.updateUser({ email: newEmail });
+      if (error) alert("Error: " + error.message);
+      else {
+        alert(`Verification email sent to ${newEmail}. Please confirm to finalize email change.`);
+        document.getElementById("adm-new-email").value = "";
+      }
+    }
+
+    // ── Change Admin Password ────────────────────────────────────────────
+    async function changeAdminPassword() {
+      const p1 = document.getElementById("adm-new-pw").value;
+      const p2 = document.getElementById("adm-confirm-pw").value;
+      if (!p1 || p1.length < 8) {
+        alert("Password must be at least 8 characters.");
+        return;
+      }
+      if (p1 !== p2) {
+        alert("Passwords do not match.");
+        return;
+      }
+      const { error } = await window.supabaseClient.auth.updateUser({ password: p1 });
+      if (error) alert("Error: " + error.message);
+      else {
+        alert("Password updated successfully.");
+        document.getElementById("adm-new-pw").value = "";
+        document.getElementById("adm-confirm-pw").value = "";
+      }
+    }
+
+    // ── Clear Cache ──────────────────────────────────────────────────────
+    function clearLocalCache() {
+      localStorage.removeItem("rotcims_modules_cache");
+      sessionStorage.clear();
+      alert("Local offline caches cleared successfully.");
+    }
+
+    // ── Facebook-Style Sign Out ──────────────────────────────────────────
+    function confirmSignOut() {
+      if (confirm("Are you sure you want to sign out of the ROTCIMS Command System?")) {
+        Auth.logout();
+      }
+    }
+  </script>
+</body>
+</html>

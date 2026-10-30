@@ -1,0 +1,1944 @@
+<!--
+  ============================================================
+  FILE: admin-reports.html
+  PURPOSE: Official attendance ledger & drill roster generator.
+           Features grouped Company & Platoon muster tables,
+           live summary metrics, paper size switcher, and
+           submission-ready print ledger with official header
+           and three-signature block.
+  ============================================================
+-->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Attendance Reports &amp; Ledgers — ROTCIMS</title>
+  <link rel="stylesheet" href="css/style.css">
+  <link rel="stylesheet" href="css/portal.css">
+  <link rel="stylesheet" href="css/responsive.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="js/xlsx.full.min.js"></script>
+  <script src="js/config.js"></script>
+  <script src="js/auth.js"></script>
+  <script src="js/rbac.js"></script>
+
+  <style>
+    /* ===== DOCUMENT CARD — dark mode aware ===== */
+    #printable-doc {
+      background: var(--portal-card-bg);
+      border: 1px solid var(--portal-border);
+      border-radius: 12px;
+      padding: 1.5rem;
+      box-shadow: var(--portal-shadow-sm);
+    }
+
+    /* ===== STRICTLY HIDDEN ON SCREEN ===== */
+    .doc-header-img,
+    .doc-title-band,
+    .doc-meta-row,
+    .doc-summary-row,
+    .sig-block,
+    .doc-footer-note,
+    .col-sig { display: none !important; }
+
+    /* ===== DOCUMENT TITLE BAND (print only) ===== */
+    .doc-title-band {
+      border: 1.5px solid #000;
+      padding: 0.6rem 1rem;
+      margin-bottom: 1rem;
+      text-align: center;
+    }
+    .doc-title-band h2 {
+      font-size: 1rem; font-weight: 900;
+      text-transform: uppercase; letter-spacing: 0.08em;
+      text-decoration: underline; margin: 0 0 0.25rem;
+    }
+    .doc-title-band p { font-size: 0.8rem; margin: 0.1rem 0; color: #333; }
+
+    /* ===== DOC META ROW (print only) ===== */
+    .doc-meta-row {
+      justify-content: space-between;
+      font-size: 0.72rem; color: #555; margin-bottom: 0.5rem;
+    }
+
+    /* ===== GROUPED COMPANY & PLATOON LEDGER ===== */
+    .company-ledger-block {
+      margin-bottom: 2rem;
+      border: 1px solid var(--portal-border);
+      border-radius: 10px;
+      overflow: hidden;
+      background: var(--portal-card-bg);
+    }
+    .company-ledger-header {
+      background: rgba(30,58,41,0.06);
+      border-bottom: 2px solid var(--portal-brass);
+      padding: 0.75rem 1.25rem;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 0.5rem;
+    }
+    .company-ledger-title {
+      font-family: 'Oswald', sans-serif;
+      font-size: 1.1rem;
+      font-weight: 700;
+      color: var(--portal-ink);
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+    .company-ledger-stats {
+      font-size: 0.8rem;
+      font-weight: 600;
+      color: var(--portal-muted);
+    }
+    .platoon-subledger {
+      padding: 1rem 1.25rem;
+      border-bottom: 1px dashed var(--portal-border);
+    }
+    .platoon-subledger:last-child {
+      border-bottom: none;
+    }
+    .platoon-subledger-title {
+      font-size: 0.88rem;
+      font-weight: 700;
+      color: var(--portal-ink);
+      margin-bottom: 0.6rem;
+      display: flex;
+      align-items: center;
+      gap: 0.4rem;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+
+    /* ===== REPORT TABLE — dark mode aware ===== */
+    .report-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.82rem;
+      color: var(--portal-text);
+    }
+    .report-table th {
+      background: var(--portal-th-bg);
+      border: 1px solid var(--portal-border);
+      padding: 0.42rem 0.55rem;
+      text-align: left;
+      font-size: 0.73rem;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      font-weight: 800;
+      color: var(--portal-muted);
+    }
+    .report-table td {
+      border: 1px solid var(--portal-border);
+      padding: 0.4rem 0.55rem;
+      vertical-align: middle;
+      color: var(--portal-text);
+    }
+    .report-table tr:nth-child(even) td { background: rgba(0,0,0,0.02); }
+    [data-theme="dark"] .report-table tr:nth-child(even) td { background: rgba(255,255,255,0.03); }
+    .report-table tr:hover td { background: var(--portal-row-hover); }
+    .mono-cell { font-family: 'JetBrains Mono', monospace; font-size: 0.78rem; color: var(--portal-muted) !important; }
+
+    /* ===== STATUS BADGES ===== */
+    .st-badge {
+      display: inline-block; font-size: 0.7rem; font-weight: 800;
+      padding: 0.15rem 0.5rem; border-radius: 4px;
+      text-transform: uppercase; letter-spacing: 0.05em;
+    }
+    .st-present { background: var(--portal-success-bg); color: var(--portal-success); border: 1px solid var(--portal-success-border); }
+    .st-late    { background: var(--portal-warning-bg); color: var(--portal-warning); border: 1px solid var(--portal-warning-border); }
+    .st-absent  { background: var(--portal-danger-bg);  color: var(--portal-danger);  border: 1px solid var(--portal-danger-border); }
+    .st-excused { background: var(--portal-info-bg);    color: var(--portal-info);    border: 1px solid var(--portal-info-border); }
+    .st-qr {
+      display: inline-block; font-size: 0.68rem; font-weight: 700;
+      padding: 0.1rem 0.4rem; border-radius: 3px;
+      background: var(--portal-border-subtle);
+      border: 1px solid var(--portal-border);
+      color: var(--portal-muted);
+    }
+
+    /* ===== SIGNATURE BLOCK (print only) ===== */
+    .sig-block { justify-content: space-between; gap: 1rem; }
+    .sig-item { text-align: center; flex: 1; }
+    .sig-line { border-bottom: 1px solid #000; min-height: 2.5rem; margin-bottom: 0.4rem; }
+    .sig-title { font-weight: 900; font-size: 0.78rem; text-transform: uppercase; }
+    .sig-sub   { font-size: 0.68rem; color: #555; margin-top: 0.1rem; }
+
+    /* ===== FOOTER NOTE (print only) ===== */
+    .doc-footer-note {
+      text-align: center; font-size: 0.65rem; color: #777;
+      margin-top: 1.5rem; padding-top: 0.5rem;
+      border-top: 1px dashed #ccc;
+    }
+
+    /* ===== SUMMARY STATS (print only) ===== */
+    .doc-summary-row { gap: 1rem; margin-bottom: 0.75rem; flex-wrap: wrap; }
+    .doc-stat {
+      border: 1px solid #ccc; border-radius: 6px;
+      padding: 0.3rem 0.75rem; font-size: 0.78rem;
+      text-align: center; min-width: 80px;
+    }
+    .doc-stat strong { display: block; font-size: 1.1rem; }
+
+    /* ===== EXPORT TOOLBAR ===== */
+    .export-toolbar {
+      display: flex; gap: 0.6rem; align-items: center;
+      flex-wrap: wrap; margin-top: 1rem;
+      border-top: 1px dashed var(--portal-border);
+      padding-top: 1rem;
+    }
+    .btn-export {
+      display: inline-flex; align-items: center; gap: 0.4rem;
+      padding: 0.55rem 1rem; border-radius: 8px;
+      font-size: 0.83rem; font-weight: 700;
+      cursor: pointer; border: none; font-family: inherit;
+      transition: opacity 0.15s, transform 0.12s;
+    }
+    .btn-export:hover  { opacity: 0.88; transform: translateY(-1px); }
+    .btn-export:active { transform: translateY(0); }
+    .btn-csv   { background: #16a34a; color: #fff; }
+    .btn-print { background: var(--portal-primary); color: #fff; }
+    .btn-copy  { background: #2563eb; color: #fff; }
+
+    /* ===== PAPER SIZE SELECTOR ===== */
+    .paper-size-group { display: flex; align-items: center; gap: 0.5rem; }
+    .paper-size-group label {
+      font-size: 0.78rem; font-weight: 700;
+      color: var(--portal-muted);
+      text-transform: uppercase; letter-spacing: 0.05em; white-space: nowrap;
+    }
+    .paper-size-group select {
+      padding: 0.45rem 0.7rem; border-radius: 7px;
+      border: 1.5px solid var(--portal-border);
+      font-size: 0.82rem; font-family: inherit;
+      background: var(--portal-card-bg);
+      color: var(--portal-ink); cursor: pointer;
+    }
+
+    /* ===== FORM ELEMENTS ===== */
+    .form-select {
+      background: var(--portal-card-bg) !important;
+      color: var(--portal-ink) !important;
+      border-color: var(--portal-border) !important;
+    }
+    .form-label { color: var(--portal-muted) !important; }
+
+    /* ===== FILTER CARD ===== */
+    .filter-card {
+      background: var(--portal-card-bg);
+      border: 1px solid var(--portal-border);
+      border-radius: 12px;
+      padding: 1.25rem;
+      margin-bottom: 1rem;
+    }
+
+    /* ===== METRIC CARDS — 5 COLUMNS BALANCED (NO LEFTOVER / WALANG SUBRA) ===== */
+    .metric-card {
+      background: var(--portal-card-bg) !important;
+      border: 1px solid var(--portal-border) !important;
+    }
+    .metric-card .label { color: var(--portal-muted) !important; }
+    .metric-card .value { color: var(--portal-ink) !important; }
+
+    .reports-metric-deck {
+      display: grid !important;
+      grid-template-columns: repeat(5, minmax(0, 1fr)) !important;
+      gap: 0.85rem !important;
+      margin-bottom: 1.25rem !important;
+      width: 100% !important;
+    }
+    .reports-metric-deck .metric-card {
+      padding: 0.9rem 1rem !important;
+      display: flex !important;
+      align-items: center !important;
+      gap: 0.75rem !important;
+      min-width: 0 !important;
+      border-radius: var(--portal-radius-md, 12px) !important;
+      box-shadow: var(--portal-shadow-sm) !important;
+    }
+    .reports-metric-deck .metric-icon {
+      width: 42px !important;
+      height: 42px !important;
+      border-radius: 10px !important;
+      font-size: 1.15rem !important;
+      display: flex !important;
+      align-items: center !important;
+      justify-content: center !important;
+      flex-shrink: 0 !important;
+    }
+    .reports-metric-deck .metric-data {
+      min-width: 0 !important;
+      overflow: hidden !important;
+    }
+    .reports-metric-deck .metric-data .label {
+      font-size: 0.72rem !important;
+      text-transform: uppercase !important;
+      letter-spacing: 0.04em !important;
+      white-space: nowrap !important;
+      text-overflow: ellipsis !important;
+      overflow: hidden !important;
+      font-weight: 700 !important;
+    }
+    .reports-metric-deck .metric-data .value {
+      font-size: 1.45rem !important;
+      font-weight: 800 !important;
+      line-height: 1.1 !important;
+      font-family: 'Oswald', sans-serif !important;
+      letter-spacing: 0.02em !important;
+    }
+
+    @media (max-width: 900px) {
+      .reports-metric-deck {
+        grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)) !important;
+        gap: 0.5rem !important;
+      }
+      .reports-metric-deck .metric-card {
+        padding: 0.65rem 0.75rem !important;
+      }
+    }
+
+    /* ===== @media print ===== */
+    @media print {
+      .sidebar, .top-bar, .no-print,
+      .mobile-menu-btn, .export-toolbar,
+      .metric-grid, .user-badge,
+      .btn, .btn-brass, .btn-primary,
+      .paper-size-group,
+      .filter-card { display: none !important; }
+
+      body { margin:0; padding:0; background:#fff !important; color:#000 !important; }
+      .portal-layout { display:block !important; }
+      .main-content  { margin:0 !important; padding:0 !important; width:100% !important; }
+      .content-body  { padding:0 !important; margin:0 !important; }
+
+      #printable-doc {
+        background: #fff !important;
+        border: none !important; box-shadow: none !important;
+        border-radius: 0 !important; padding: 0 !important; margin: 0 !important;
+      }
+
+      /* REVEAL print-only elements */
+      .doc-header-img  { display: block !important; width:100%; margin-bottom:0.5rem; }
+      .doc-meta-row    { display: flex !important; }
+      .doc-title-band  { display: block !important; }
+      .doc-summary-row { display: flex !important; }
+      .sig-block       { display: flex !important; }
+      .doc-footer-note { display: block !important; }
+
+      /* Grouped Company Print Styles */
+      .company-ledger-block {
+        border: 2px solid #000 !important;
+        border-radius: 0 !important;
+        margin-bottom: 1.75rem !important;
+        page-break-inside: auto;
+      }
+      .company-ledger-header {
+        background: #e5e5e5 !important;
+        border-bottom: 2px solid #000 !important;
+        padding: 0.5rem 0.75rem !important;
+        -webkit-print-color-adjust: exact; print-color-adjust: exact;
+      }
+      .company-ledger-title {
+        color: #000 !important;
+        font-size: 1.05rem !important;
+      }
+      .company-ledger-stats {
+        color: #222 !important;
+        font-size: 0.75rem !important;
+      }
+      .platoon-subledger {
+        padding: 0.5rem 0.75rem !important;
+        border-bottom: 1.5px solid #000 !important;
+      }
+      .platoon-subledger:last-child {
+        border-bottom: none !important;
+      }
+      .platoon-subledger-title {
+        color: #000 !important;
+        font-size: 0.82rem !important;
+      }
+
+      /* Table Print Styles */
+      .report-table th {
+        background: #f0f0f0 !important; color: #000 !important;
+        border-color: #000 !important;
+        -webkit-print-color-adjust: exact; print-color-adjust: exact;
+      }
+      .report-table td { color: #000 !important; border-color: #000 !important; }
+      .report-table tr:nth-child(even) td {
+        background: #fafafa !important;
+        -webkit-print-color-adjust: exact; print-color-adjust: exact;
+      }
+
+      .st-badge {
+        background: none !important; border: 1px solid #000 !important;
+        color: #000 !important;
+      }
+      .st-qr { background: none !important; border: 1px solid #aaa !important; color: #555 !important; }
+      .mono-cell { color: #333 !important; }
+
+      .col-sig {
+        display: table-cell !important;
+        width: 130px;
+        text-align: center;
+        border: 1px solid #000 !important;
+      }
+
+      .table-responsive { overflow: visible !important; }
+      .sig-block { page-break-inside: avoid; }
+    }
+  
+    /* ── File Archive Library & Tabs ─────────────────────────── */
+    .report-tabs {
+      display: flex;
+      gap: 0.5rem;
+      margin-bottom: 1.25rem;
+      border-bottom: 2px solid var(--portal-border);
+      padding-bottom: 0;
+    }
+    .report-tab-btn {
+      padding: 0.65rem 1.4rem;
+      background: transparent;
+      border: none;
+      border-bottom: 3px solid transparent;
+      color: var(--portal-muted);
+      font-size: 0.9rem;
+      font-weight: 700;
+      cursor: pointer;
+      margin-bottom: -2px;
+      transition: all 0.2s ease;
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+    .report-tab-btn.active {
+      color: var(--portal-brass);
+      border-bottom-color: var(--portal-brass);
+      background: rgba(184, 142, 44, 0.08);
+      border-radius: 8px 8px 0 0;
+    }
+    .report-tab-btn:hover:not(.active) {
+      color: var(--portal-ink);
+      background: var(--portal-border-subtle);
+      border-radius: 8px 8px 0 0;
+    }
+    .tab-panel {
+      display: none;
+    }
+    .tab-panel.active {
+      display: block;
+    }
+
+    .file-archive-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(290px, 1fr));
+      gap: 1rem;
+      margin-bottom: 1.5rem;
+    }
+    .file-card {
+      background: var(--portal-card-bg);
+      border: 1px solid var(--portal-border);
+      border-radius: 12px;
+      padding: 1.15rem 1.25rem;
+      display: flex;
+      flex-direction: column;
+      gap: 0.75rem;
+      transition: all 0.2s ease;
+      position: relative;
+    }
+    .file-card:hover {
+      box-shadow: 0 6px 20px rgba(0, 0, 0, 0.15);
+      border-color: rgba(184, 142, 44, 0.5);
+      transform: translateY(-2px);
+    }
+    .file-card-header {
+      display: flex;
+      align-items: flex-start;
+      gap: 0.85rem;
+    }
+    .file-type-icon {
+      width: 44px;
+      height: 44px;
+      border-radius: 10px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1.35rem;
+      flex-shrink: 0;
+    }
+    .file-type-xlsx { background: rgba(34, 197, 94, 0.14); color: #22c55e; }
+    .file-type-csv  { background: rgba(56, 189, 248, 0.14); color: #38bdf8; }
+    .file-type-pdf  { background: rgba(239, 68, 68, 0.14);  color: #ef4444; }
+    .file-type-docx { background: rgba(59, 130, 246, 0.14); color: #3b82f6; }
+    .file-card-name {
+      font-size: 0.85rem;
+      font-weight: 700;
+      color: var(--portal-ink);
+      line-height: 1.35;
+      word-break: break-word;
+    }
+    .file-card-meta {
+      font-size: 0.74rem;
+      color: var(--portal-muted);
+      line-height: 1.5;
+      margin-top: 0.2rem;
+    }
+    .file-card-actions {
+      display: flex;
+      gap: 0.45rem;
+      flex-wrap: wrap;
+      margin-top: 0.25rem;
+      border-top: 1px solid var(--portal-border-subtle);
+      padding-top: 0.65rem;
+    }
+    .file-act-btn {
+      padding: 0.35rem 0.75rem;
+      border-radius: 6px;
+      border: 1px solid var(--portal-border);
+      background: var(--portal-border-subtle);
+      color: var(--portal-ink);
+      font-size: 0.75rem;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 0.35rem;
+      font-weight: 600;
+      transition: all 0.15s ease;
+    }
+    .file-act-btn:hover {
+      background: var(--portal-border);
+    }
+    .file-act-btn.primary {
+      background: var(--portal-brass);
+      border-color: var(--portal-brass);
+      color: #0a170f;
+      font-weight: 700;
+    }
+    .file-act-btn.primary:hover {
+      opacity: 0.9;
+    }
+    .file-card-delete {
+      position: absolute;
+      top: 0.65rem;
+      right: 0.65rem;
+      background: transparent;
+      border: none;
+      color: rgba(239, 68, 68, 0.5);
+      cursor: pointer;
+      font-size: 0.85rem;
+      padding: 0.25rem;
+      transition: color 0.15s;
+    }
+    .file-card-delete:hover {
+      color: #ef4444;
+    }
+    .archive-empty {
+      text-align: center;
+      padding: 3rem 1.5rem;
+      color: var(--portal-muted);
+      border: 2px dashed var(--portal-border);
+      border-radius: 12px;
+      margin-bottom: 1rem;
+    }
+
+  </style>
+  <script src="js/user-menu.js"></script>
+</head>
+<body>
+
+  <div class="portal-layout">
+
+    <!-- ===== SIDEBAR ===== -->
+            <aside class="sidebar">
+      <div class="sidebar-header">
+        <div class="brand">
+          <img src="assets/logo.png" alt="Logo" onerror="this.src='assets/icon.png'">
+          <div class="brand-text">ROTCIMS <span>Command Staff</span></div>
+        </div>
+      </div>
+      <nav class="sidebar-nav">
+        <div class="nav-group-title">Overview</div>
+        <ul class="sidebar-menu">
+          <li><a href="admin-dashboard.html"><i class="fa-solid fa-chart-pie"></i> Dashboard</a></li>
+        </ul>
+        <div class="nav-group-title">Drill &amp; Attendance</div>
+        <ul class="sidebar-menu">
+          <li><a href="admin-attendance.html"><i class="fa-solid fa-clipboard-check"></i> Attendance</a></li>
+          <li><a href="admin-reports.html" class="active"><i class="fa-solid fa-file-invoice"></i> Attendance Reports</a></li>
+        </ul>
+        <div class="nav-group-title">Cadets &amp; Admissions</div>
+        <ul class="sidebar-menu">
+          <li><a href="admin-cadets.html"><i class="fa-solid fa-users-viewfinder"></i> Cadet Directory</a></li>
+        </ul>
+        <div class="nav-group-title">Content &amp; Academics</div>
+        <ul class="sidebar-menu">
+          <li><a href="admin-posting.html"><i class="fa-solid fa-pen-to-square"></i> Posting Center</a></li>
+          <li><a href="admin-documents.html"><i class="fa-solid fa-book-bookmark"></i> Modules &amp; Documents</a></li>
+        </ul>
+        <div class="nav-group-title">Personnel &amp; Governance</div>
+        <ul class="sidebar-menu">
+          <li><a href="admin-accounts.html"><i class="fa-solid fa-users-gear"></i> Personnel &amp; Roles</a></li>
+          <li><a href="admin-settings.html"><i class="fa-solid fa-sliders"></i> Settings &amp; Storage</a></li>
+        </ul>
+      </nav>
+    </aside>
+
+    <!-- ===== MAIN CONTENT ===== -->
+    <main class="main-content">
+
+      <!-- TOP BAR -->
+      <header class="top-bar no-print">
+        <div style="display:flex;align-items:center;gap:0.75rem;">
+          <button class="mobile-menu-btn" onclick="toggleMobileMenu()">☰</button>
+          <div class="page-title">
+            <h1><i class="fa-solid fa-file-invoice" style="color:var(--brass-light);margin-right:0.4rem;"></i>Official Attendance Reports &amp; Ledgers</h1>
+            <p>AFP compliant formation attendance rosters grouped by Company and Platoon.</p>
+          </div>
+        </div>
+        <div class="user-badge">
+          <div class="avatar" id="user-avatar">RP</div>
+          <div class="user-info">
+            <div class="name" id="user-name">Loading...</div>
+            <div class="role-tag" id="user-role">Officer</div>
+          </div>
+        </div>
+      </header>
+
+      <div class="content-body">
+
+        <!-- ===== FILTER + EXPORT TOOLBAR ===== -->
+        <div class="filter-card no-print" style="margin-bottom: 1.25rem;">
+          <div style="display:flex;gap:1rem;flex-wrap:wrap;align-items:flex-end;">
+
+            <!-- Session -->
+            <div style="flex:1;min-width:210px;">
+              <label class="form-label">Formation Drill Session</label>
+              <select id="report-session" class="form-select" onchange="generateReport()">
+                <option value="all">All Formations</option>
+              </select>
+            </div>
+
+            <!-- Company -->
+            <div style="min-width:150px;">
+              <label class="form-label">Company</label>
+              <select id="report-company" class="form-select" onchange="generateReport()">
+                <option value="all">All Companies</option>
+                <option value="Alpha">Alpha Company</option>
+                <option value="Bravo">Bravo Company</option>
+                <option value="Charlie">Charlie Company</option>
+                <option value="Delta">Delta Company</option>
+                <option value="Medics">Medics Unit</option>
+                <option value="GHQ">Headquarters (GHQ)</option>
+              </select>
+            </div>
+
+            <!-- Platoon -->
+            <div style="min-width:140px;">
+              <label class="form-label">Platoon</label>
+              <select id="report-platoon" class="form-select" onchange="generateReport()">
+                <option value="all">All Platoons</option>
+                <option value="1st Platoon">1st Platoon</option>
+                <option value="2nd Platoon">2nd Platoon</option>
+                <option value="3rd Platoon">3rd Platoon</option>
+              </select>
+            </div>
+
+            <!-- Status Filter -->
+            <div style="min-width:130px;">
+              <label class="form-label">Status Filter</label>
+              <select id="report-status" class="form-select" onchange="generateReport()">
+                <option value="all">All Status</option>
+                <option value="present">Present</option>
+                <option value="late">Late</option>
+                <option value="absent">Absent</option>
+              </select>
+            </div>
+
+            <!-- Paper Size -->
+            <div class="paper-size-group">
+              <label><i class="fa-solid fa-file"></i> Paper Size</label>
+              <select id="paper-size" onchange="applyPaperSize()">
+                <option value="A4 portrait">A4 Portrait</option>
+                <option value="A4 landscape" selected>A4 Landscape</option>
+                <option value="letter portrait">Short (Letter) Portrait</option>
+                <option value="letter landscape">Short (Letter) Landscape</option>
+                <option value="legal portrait">Long (Legal) Portrait</option>
+                <option value="legal landscape">Long (Legal) Landscape</option>
+              </select>
+            </div>
+
+          </div>
+        </div><!-- end filter-card -->
+
+        <!-- ===== REPORT SECTION TABS ===== -->
+        <div class="report-tabs no-print" id="report-tabs">
+          <button class="report-tab-btn active" id="tab-btn-ledger" onclick="switchReportTab('ledger')">
+            <i class="fa-solid fa-clipboard-list"></i> Attendance Ledger
+          </button>
+          <button class="report-tab-btn" id="tab-btn-archive" onclick="switchReportTab('archive')">
+            <i class="fa-solid fa-folder-open"></i> Saved Report Files
+            <span id="archive-count-badge" style="background:var(--portal-brass);color:#0a170f;border-radius:10px;padding:0.05rem 0.45rem;font-size:0.68rem;font-weight:800;margin-left:0.2rem;">0</span>
+          </button>
+        </div>
+
+        <!-- ===== TAB 2: SAVED FILES LIBRARY (TABLE FORMAT MATCHING SCREENSHOT) ===== -->
+        <div class="tab-panel no-print" id="tab-archive">
+          <div class="card" style="padding: 1.25rem 1.5rem; margin-bottom: 1.5rem;">
+            <!-- Header bar -->
+            <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:0.75rem;margin-bottom:1.25rem;border-bottom:1px solid var(--portal-border);padding-bottom:0.85rem;">
+              <div>
+                <h3 style="margin:0;font-family:'Oswald',sans-serif;font-size:1.2rem;color:var(--portal-ink);letter-spacing:0.03em;display:flex;align-items:center;gap:0.5rem;">
+                  <i class="fa-solid fa-folder-open" style="color:var(--portal-brass);"></i>
+                  Published Attendance Ledgers &amp; Files
+                </h3>
+                <div style="font-size:0.8rem;color:var(--portal-muted);margin-top:0.2rem;">
+                  Official documents, spreadsheets, and doctrine files available for viewing and download.
+                </div>
+              </div>
+              <div style="display:flex;gap:0.5rem;align-items:center;">
+                <input id="archive-search" type="search" placeholder="Search files by title or format..."
+                  oninput="renderArchiveLibrary()" onchange="renderArchiveLibrary()"
+                  style="padding:0.45rem 0.85rem;border:1px solid var(--portal-border);border-radius:7px;background:var(--portal-card-bg);color:var(--portal-ink);font-size:0.82rem;width:240px;">
+                <button onclick="clearAllArchives()" class="btn btn-outline btn-sm"
+                  style="font-size:0.76rem;color:var(--portal-danger);border-color:rgba(239,68,68,0.4);"
+                  title="Clear all saved reports">
+                  <i class="fa-solid fa-trash"></i> Clear All
+                </button>
+              </div>
+            </div>
+
+            <!-- Documents & Files Table (Matches Screenshot) -->
+            <div class="table-responsive" style="overflow-x:auto;">
+              <table class="data-table" style="width:100%;font-size:0.83rem;">
+                <thead>
+                  <tr>
+                    <th style="min-width:280px;">MODULE / DOCUMENT TITLE</th>
+                    <th style="min-width:90px;text-align:center;">FORMAT</th>
+                    <th style="min-width:110px;text-align:center;">CATEGORY</th>
+                    <th style="min-width:130px;text-align:center;">TARGET AUDIENCE</th>
+                    <th style="min-width:90px;">FILE SIZE</th>
+                    <th style="min-width:100px;">UPLOAD DATE</th>
+                    <th style="min-width:100px;text-align:center;">STATUS</th>
+                    <th style="min-width:100px;text-align:right;">ACTIONS</th>
+                  </tr>
+                </thead>
+                <tbody id="archive-table-tbody">
+                  <!-- Dynamically rendered via renderArchiveLibrary() -->
+                </tbody>
+              </table>
+            </div>
+
+            <!-- Inline spreadsheet/document viewer preview -->
+            <div id="archive-inline-viewer" style="display:none; margin-top:1.5rem; border-top:2px solid var(--portal-border); padding-top:1.25rem;">
+              <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:0.75rem;padding:0.75rem 1rem;background:var(--portal-border-subtle);border-radius:10px;">
+                <div style="font-weight:700;font-size:0.9rem;color:var(--portal-ink);">
+                  <i class="fa-solid fa-table" style="color:var(--portal-brass);margin-right:0.4rem;"></i>
+                  <span id="archive-viewer-title">File Preview</span>
+                </div>
+                <div style="display:flex;gap:0.5rem;">
+                  <button onclick="archiveDownload('xlsx')" class="file-act-btn primary">
+                    <i class="fa-solid fa-file-excel"></i> Download Excel
+                  </button>
+                  <button onclick="archiveDownload('csv')" class="file-act-btn">
+                    <i class="fa-solid fa-file-csv"></i> CSV
+                  </button>
+                  <button onclick="archiveDownload('pdf')" class="file-act-btn">
+                    <i class="fa-solid fa-file-pdf" style="color:#ef4444;"></i> PDF
+                  </button>
+                  <button onclick="document.getElementById('archive-inline-viewer').style.display='none'" class="file-act-btn">
+                    <i class="fa-solid fa-xmark"></i> Close Preview
+                  </button>
+                </div>
+              </div>
+              <div id="archive-viewer-grid" style="overflow-x:auto;max-height:480px;overflow-y:auto;border:1px solid var(--portal-border);border-radius:8px;"></div>
+            </div>
+          </div>
+        </div><!-- /tab-archive -->
+
+        <!-- ===== TAB 1: ATTENDANCE LEDGER ===== -->
+        <div class="tab-panel active" id="tab-ledger">
+
+          <!-- Export Toolbar -->
+          <div class="export-toolbar no-print">
+            <span class="export-label">
+              <i class="fa-solid fa-download"></i> Export &amp; Print:
+            </span>
+            <button class="btn-export btn-csv" onclick="exportCSV()">
+              <i class="fa-solid fa-file-csv"></i> Export Grouped CSV
+            </button>
+            <button class="btn-export btn-print" onclick="doPrint()">
+              <i class="fa-solid fa-print"></i> Print Ledger
+            </button>
+            <span style="margin-left:auto;font-size:0.78rem;color:var(--portal-muted);" id="record-count-label">
+              <i class="fa-solid fa-list-ol"></i> <strong id="rep-total">0</strong> records
+            </span>
+          </div>
+
+          <!-- ===== METRIC SUMMARY CARDS ===== -->
+          <div class="metric-grid reports-metric-deck no-print">
+            <div class="metric-card">
+              <div class="metric-icon"><i class="fa-solid fa-users"></i></div>
+              <div class="metric-data"><div class="label">Total Roster</div><div class="value" id="rep-total-card">0</div></div>
+            </div>
+            <div class="metric-card">
+              <div class="metric-icon" style="color:var(--portal-success);background:var(--portal-success-bg);"><i class="fa-solid fa-circle-check"></i></div>
+              <div class="metric-data"><div class="label">Present</div><div class="value" id="rep-present">0</div></div>
+            </div>
+            <div class="metric-card">
+              <div class="metric-icon" style="color:var(--portal-warning);background:var(--portal-warning-bg);"><i class="fa-solid fa-clock"></i></div>
+              <div class="metric-data"><div class="label">Late</div><div class="value" id="rep-late">0</div></div>
+            </div>
+            <div class="metric-card">
+              <div class="metric-icon" style="color:var(--portal-danger);background:var(--portal-danger-bg);"><i class="fa-solid fa-circle-xmark"></i></div>
+              <div class="metric-data"><div class="label">Absent</div><div class="value" id="rep-absent">0</div></div>
+            </div>
+            <div class="metric-card">
+              <div class="metric-icon" style="color:var(--portal-brass);background:var(--portal-brass-glow);"><i class="fa-solid fa-chart-line"></i></div>
+              <div class="metric-data"><div class="label">Turnout Rate</div><div class="value" id="rep-rate">0%</div></div>
+            </div>
+          </div>
+<div id="printable-doc">
+
+          <!-- Document Meta Row (Report No. + Date) -->
+          <div class="doc-meta-row">
+            <span>Report No.: <strong id="print-report-no">—</strong></span>
+            <span>Date Printed: <strong id="print-date">—</strong></span>
+          </div>
+
+          <!-- Official Header Image -->
+          <img src="assets/header.jpg" alt="ROTC Official Header" class="doc-header-img"
+            onerror="this.style.display='none'">
+
+          <!-- Document Title Band -->
+          <div class="doc-title-band">
+            <h2>Official Roster of Attendance &amp; Parade Drill Record</h2>
+            <p id="print-meta-text">Session: All Formations</p>
+            <p id="print-meta-filter">Company: All &nbsp;|&nbsp; Platoon: All &nbsp;|&nbsp; Status: All &nbsp;|&nbsp; Academic Year: S.Y. 2026–2027</p>
+          </div>
+
+          <!-- In-document summary stats -->
+          <div class="doc-summary-row">
+            <div class="doc-stat"><strong id="ds-total">0</strong>Total</div>
+            <div class="doc-stat" style="color:#16a34a;"><strong id="ds-present">0</strong>Present</div>
+            <div class="doc-stat" style="color:#d97706;"><strong id="ds-late">0</strong>Late</div>
+            <div class="doc-stat" style="color:#dc2626;"><strong id="ds-absent">0</strong>Absent</div>
+            <div class="doc-stat" style="color:#1e3a29;"><strong id="ds-rate">0%</strong>Turnout</div>
+          </div>
+
+          <!-- Grouped Tables Container (Company > Platoon) -->
+          <div id="report-tables-container">
+            <div style="text-align:center; padding:2.5rem; color:var(--portal-muted);">
+              <i class="fa-solid fa-spinner fa-spin"></i> Loading attendance ledger...
+            </div>
+          </div>
+
+          <!-- Signature Block -->
+          <div class="sig-block">
+            <div class="sig-item">
+              <div class="sig-line"></div>
+              <div class="sig-title">Platoon Leader</div>
+              <div class="sig-sub">Prepared by / Duty Officer</div>
+            </div>
+            <div class="sig-item">
+              <div class="sig-line"></div>
+              <div class="sig-title">S1 Adjutant / Clerk</div>
+              <div class="sig-sub">Attested by</div>
+            </div>
+            <div class="sig-item">
+              <div class="sig-line"></div>
+              <div class="sig-title">Commandant / DMST Officer</div>
+              <div class="sig-sub">Approved by</div>
+            </div>
+          </div>
+
+          <!-- Document Footer -->
+          <div class="doc-footer-note">
+            This document is an official record of the San Enrique ROTC Unit — ROTCIMS v2.0
+            &nbsp;|&nbsp; Generated: <span id="print-footer-date">—</span>
+            &nbsp;|&nbsp; For official use only. Unauthorized reproduction is prohibited.
+          </div>
+
+        </div><!-- /printable-doc -->
+          </div><!-- /tab-ledger -->
+      </div><!-- /content-body -->
+    </main>
+  </div>
+
+  <!-- Print page-size style tag — updated dynamically by JS -->
+  <style id="page-size-style">
+    @media print { @page { size: A4 landscape; margin: 15mm 12mm 18mm 12mm; } }
+  </style>
+
+  <script>
+    let reportData = [];
+
+    // ================================================================
+    // INIT
+    // ================================================================
+    document.addEventListener("DOMContentLoaded", async () => {
+      const officer = await Auth.requireAuth(["admin","personnel","platoon_leader","officer"]);
+      if (!officer) return;
+
+      const now      = new Date();
+      const dateStr  = now.toLocaleDateString("en-PH", { year:"numeric", month:"long", day:"numeric" });
+      const timeStr  = now.toLocaleTimeString("en-PH", { hour:"2-digit", minute:"2-digit" });
+      const reportNo = now.getFullYear().toString().slice(-2)
+        + String(now.getMonth()+1).padStart(2,'0')
+        + String(now.getDate()).padStart(2,'0')
+        + '-' + String(Math.floor(Math.random()*9000)+1000);
+
+      setText("print-report-no",   reportNo);
+      setText("print-date",        `${dateStr}, ${timeStr}`);
+      setText("print-footer-date", `${dateStr} at ${timeStr}`);
+
+      await loadSessionFilter();
+
+      // Check URL query parameters (e.g. redirected from Attendance Export button)
+      const urlParams = new URLSearchParams(window.location.search);
+      const targetSession = urlParams.get("session");
+      const targetAction  = urlParams.get("action");
+      const targetStatus  = urlParams.get("status");
+      const targetPlatoon = urlParams.get("platoon");
+      const autoPrint     = urlParams.get("autoPrint");
+
+      if (targetSession && targetSession !== "all") {
+        const sessEl = document.getElementById("report-session");
+        if (sessEl) sessEl.value = targetSession;
+      }
+      if (targetStatus && targetStatus !== "all") {
+        const stEl = document.getElementById("report-status");
+        if (stEl) stEl.value = targetStatus.toLowerCase();
+      }
+      if (targetPlatoon && targetPlatoon !== "all") {
+        const pltEl = document.getElementById("report-platoon");
+        if (pltEl) pltEl.value = targetPlatoon;
+      }
+
+      await generateReport();
+
+      // Auto-trigger Excel Action Center if redirected with ?action=excel
+      if (targetAction === "excel" || targetAction === "export") {
+        setTimeout(openExcelActionCenter, 400);
+      } else if (autoPrint === "1") {
+        setTimeout(() => { doPrint(); }, 700);
+      }
+    });
+
+    function setText(id, val) {
+      const el = document.getElementById(id);
+      if (el) el.textContent = val;
+    }
+
+    // ================================================================
+    // PAPER SIZE
+    // ================================================================
+    function applyPaperSize() {
+      const size = document.getElementById("paper-size").value;
+      document.getElementById("page-size-style").textContent =
+        `@media print { @page { size: ${size}; margin: 15mm 12mm 18mm 12mm; } }`;
+    }
+
+    // ================================================================
+    // LOAD SESSIONS
+    // ================================================================
+    async function loadSessionFilter() {
+      const { data: sessions } = await window.supabaseClient
+        .from("attendance_sessions")
+        .select("id, title, session_date")
+        .order("session_date", { ascending: false });
+
+      const sel = document.getElementById("report-session");
+      if (sessions && sessions.length > 0) {
+        sel.innerHTML = '<option value="all">All Formations</option>' +
+          sessions.map(s => `<option value="${s.id}">${s.title} (${s.session_date})</option>`).join('');
+      }
+    }
+
+    // ================================================================
+    // GENERATE REPORT (Grouped by Company & Platoon)
+    // ================================================================
+    async function generateReport() {
+      const sess     = document.getElementById("report-session").value;
+      const comp     = document.getElementById("report-company").value;
+      const plt      = document.getElementById("report-platoon").value;
+      const stFilter = document.getElementById("report-status").value;
+
+      const container = document.getElementById("report-tables-container");
+      container.innerHTML = `<div style="text-align:center;padding:2rem;color:var(--portal-muted);">
+        <i class="fa-solid fa-spinner fa-spin"></i> Loading records...</div>`;
+
+      let query = window.supabaseClient
+        .from("attendance_records")
+        .select(`
+          id, session_id, cadet_id, status, scanned_at,
+          attendance_sessions ( title, session_date ),
+          cadets (
+            id, profile_id,
+            profiles ( first_name, last_name, student_id, course, section, company, platoon )
+          )
+        `)
+        .order("scanned_at", { ascending: true });
+
+      if (sess !== "all") query = query.eq("session_id", sess);
+
+      const { data: records, error } = await query;
+      if (error) {
+        console.warn("Attendance ledger query warning:", error);
+        container.innerHTML = `
+          <div style="text-align:center; padding:3rem; color:var(--portal-muted);">
+            <i class="fa-solid fa-clipboard-user" style="font-size:2.2rem; margin-bottom:0.6rem; display:block; opacity:0.6;"></i>
+            <strong>No attendance records logged for this session yet.</strong>
+            <p style="font-size:0.82rem; margin-top:0.3rem;">Cadets scanned during drill sessions will automatically populate here.</p>
+          </div>`;
+        return;
+      }
+
+      reportData = (records || []).filter(r => {
+        const p = r.cadets?.profiles || {};
+        const okComp = comp   === "all" || p.company === comp;
+        const okPlt  = plt    === "all" || p.platoon === plt;
+        const okSt   = stFilter === "all" || (r.status || '').toLowerCase() === stFilter;
+        return okComp && okPlt && okSt;
+      });
+
+      // ── Summary Metrics ─────────────────────────────────────────────
+      const total   = reportData.length;
+      const present = reportData.filter(r => (r.status||'').toUpperCase()==='PRESENT').length;
+      const late    = reportData.filter(r => (r.status||'').toUpperCase()==='LATE').length;
+      const absent  = reportData.filter(r => (r.status||'').toUpperCase()==='ABSENT').length;
+      const rate    = total > 0 ? Math.round(((present + late) / total) * 100) : 0;
+
+      setText("rep-total",      total);
+      setText("rep-total-card", total);
+      setText("rep-present",    present);
+      setText("rep-late",       late);
+      setText("rep-absent",     absent);
+      setText("rep-rate",       `${rate}%`);
+
+      setText("ds-total",   total);
+      setText("ds-present", present);
+      setText("ds-late",    late);
+      setText("ds-absent",  absent);
+      setText("ds-rate",    `${rate}%`);
+
+      // ── Print header labels ──────────────────────────────────────────
+      const sessionSel   = document.getElementById("report-session");
+      const sessionLabel = sessionSel.options[sessionSel.selectedIndex]?.text || "All Formations";
+      const compLabel    = comp     === "all" ? "All" : comp + " Company";
+      const pltLabel     = plt      === "all" ? "All" : plt;
+      const stLabel      = stFilter === "all" ? "All" : stFilter.charAt(0).toUpperCase() + stFilter.slice(1);
+
+      setText("print-meta-text",   `Session: ${sessionLabel}`);
+      setText("print-meta-filter", `Company: ${compLabel}  |  Platoon: ${pltLabel}  |  Status: ${stLabel}  |  S.Y. 2026–2027`);
+
+      if (reportData.length === 0) {
+        container.innerHTML = `
+          <div style="text-align:center; padding:3rem; color:var(--portal-muted);">
+            <i class="fa-solid fa-inbox" style="font-size:2.2rem; margin-bottom:0.6rem; display:block; opacity:0.6;"></i>
+            <strong>No attendance records match the selected criteria.</strong>
+            <p style="font-size:0.82rem; margin-top:0.3rem;">Try selecting a different formation drill session or company filter.</p>
+          </div>`;
+        return;
+      }
+
+      // ── Group by Company ────────────────────────────────────────────
+      const companyMap = new Map();
+      reportData.forEach(r => {
+        const p = r.cadets?.profiles || {};
+        const co = (p.company || '').trim() || 'Other / Unassigned';
+        if (!companyMap.has(co)) companyMap.set(co, []);
+        companyMap.get(co).push(r);
+      });
+
+      // Sort companies alphabetically, keeping Unassigned last
+      const sortedCompanies = Array.from(companyMap.keys()).sort((a,b) => {
+        const aLow = a.toLowerCase(), bLow = b.toLowerCase();
+        if (aLow.includes('unassigned') || aLow.includes('other')) return 1;
+        if (bLow.includes('unassigned') || bLow.includes('other')) return -1;
+        return a.localeCompare(b);
+      });
+
+      // Render each Company block
+      let html = '';
+      sortedCompanies.forEach(companyName => {
+        const coRecords = companyMap.get(companyName);
+        const coTotal   = coRecords.length;
+        const coPresent = coRecords.filter(r => (r.status||'').toUpperCase() === 'PRESENT').length;
+        const coLate    = coRecords.filter(r => (r.status||'').toUpperCase() === 'LATE').length;
+        const coTurnout = coTotal > 0 ? Math.round(((coPresent + coLate) / coTotal) * 100) : 0;
+
+        // Group by Platoon within this Company
+        const pltMap = new Map();
+        coRecords.forEach(r => {
+          const p = r.cadets?.profiles || {};
+          const plt = (p.platoon || '').trim() || 'General / Unassigned Platoon';
+          if (!pltMap.has(plt)) pltMap.set(plt, []);
+          pltMap.get(plt).push(r);
+        });
+
+        const sortedPlatoons = Array.from(pltMap.keys()).sort();
+
+        const formattedCoName = companyName.toUpperCase().includes('COMPANY') ||
+                                companyName.toUpperCase().includes('UNIT') ||
+                                companyName.toUpperCase().includes('GHQ')
+          ? companyName
+          : `${companyName} Company`;
+
+        html += `
+          <div class="company-ledger-block">
+            <div class="company-ledger-header">
+              <div class="company-ledger-title">
+                <i class="fa-solid fa-shield-halved" style="color:var(--portal-brass);"></i> ${formattedCoName}
+              </div>
+              <div class="company-ledger-stats">
+                Company Total: <strong>${coTotal}</strong> &nbsp;|&nbsp;
+                Present: <strong>${coPresent}</strong> &nbsp;|&nbsp;
+                Late: <strong>${coLate}</strong> &nbsp;|&nbsp;
+                Turnout: <strong>${coTurnout}%</strong>
+              </div>
+            </div>
+        `;
+
+        sortedPlatoons.forEach(platoonName => {
+          const pltRecords = pltMap.get(platoonName);
+          const pTotal = pltRecords.length;
+
+          html += `
+            <div class="platoon-subledger">
+              <div class="platoon-subledger-title">
+                <i class="fa-solid fa-flag" style="color:var(--portal-brass);"></i> ${platoonName}
+                <span style="font-size:0.75rem; font-weight:600; color:var(--portal-muted); margin-left:0.4rem;">(${pTotal} Cadet${pTotal > 1 ? 's' : ''})</span>
+              </div>
+              <div class="table-responsive">
+                <table class="report-table">
+                  <thead>
+                    <tr>
+                      <th style="width:36px; text-align:center;">#</th>
+                      <th>Cadet Full Name</th>
+                      <th>Student ID</th>
+                      <th>Course &amp; Section</th>
+                      <th>Time-In</th>
+                      <th style="text-align:center;">Method</th>
+                      <th style="text-align:center;">Status</th>
+                      <th class="col-sig">Remarks / Signature</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+          `;
+
+          pltRecords.forEach((r, idx) => {
+            const p = r.cadets?.profiles || {};
+            const fullName = `${p.last_name || ''}, ${p.first_name || ''}`.trim() || 'Cadet';
+            const timeIn = r.scanned_at
+              ? new Date(r.scanned_at).toLocaleTimeString('en-PH', { hour12: false })
+              : '---';
+            const status = (r.status || 'present').toLowerCase();
+
+            html += `
+              <tr>
+                <td style="text-align:center; font-weight:700;">${idx + 1}</td>
+                <td><strong style="color:var(--portal-ink);">${fullName}</strong></td>
+                <td class="mono-cell">${p.student_id || '---'}</td>
+                <td>${p.course || '—'} ${p.section ? '(' + p.section + ')' : ''}</td>
+                <td class="mono-cell">${timeIn}</td>
+                <td style="text-align:center;"><span class="st-qr">QR</span></td>
+                <td style="text-align:center;"><span class="st-badge st-${status}">${status.toUpperCase()}</span></td>
+                <td class="col-sig" style="height:28px;"></td>
+              </tr>
+            `;
+          });
+
+          html += `
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          `;
+        });
+
+        html += `</div>`; // Close company-ledger-block
+      });
+
+      container.innerHTML = html;
+    }
+
+    // ================================================================
+    // PRINT
+    // ================================================================
+    function doPrint() {
+      applyPaperSize();
+      setTimeout(() => window.print(), 150);
+    }
+
+    // ================================================================
+    // EXPORT GROUPED CSV
+    // ================================================================
+    function exportCSV() {
+      if (reportData.length === 0) {
+        alert("No records to export.");
+        return;
+      }
+
+      const now = new Date();
+      const sessionSel   = document.getElementById("report-session");
+      const sessionLabel = sessionSel.options[sessionSel.selectedIndex]?.text || "All Formations";
+      const compLabel    = document.getElementById("report-company").value;
+      const pltLabel     = document.getElementById("report-platoon").value;
+      const stLabel      = document.getElementById("report-status").value;
+
+      // Header metadata rows
+      const meta = [
+        ["ROTCIMS — Official Attendance Ledger (Grouped by Company & Platoon)"],
+        ["San Enrique Reserve Officers' Training Corps Unit"],
+        ["Department of Military Science and Tactics (DMST)"],
+        [],
+        ["Report No.", document.getElementById("print-report-no").textContent],
+        ["Date Exported", now.toLocaleDateString("en-PH", { year:"numeric", month:"long", day:"numeric" })
+          + " at " + now.toLocaleTimeString("en-PH", { hour:"2-digit", minute:"2-digit" })],
+        ["Session", sessionLabel],
+        ["Company Filter", compLabel === "all" ? "All Companies" : compLabel],
+        ["Platoon Filter",  pltLabel  === "all" ? "All Platoons"  : pltLabel],
+        ["Status Filter", stLabel === "all" ? "All" : stLabel],
+        ["Academic Year", "S.Y. 2026–2027"],
+        [],
+        ["TOTAL ROSTER", "PRESENT", "LATE", "ABSENT", "TURNOUT %"],
+        [
+          document.getElementById("ds-total").textContent,
+          document.getElementById("ds-present").textContent,
+          document.getElementById("ds-late").textContent,
+          document.getElementById("ds-absent").textContent,
+          document.getElementById("ds-rate").textContent,
+        ],
+        [],
+      ];
+
+      // Rows grouped by Company and Platoon
+      const rows = [];
+      const companyMap = new Map();
+      reportData.forEach(r => {
+        const p = r.cadets?.profiles || {};
+        const co = (p.company || '').trim() || 'Other / Unassigned';
+        if (!companyMap.has(co)) companyMap.set(co, []);
+        companyMap.get(co).push(r);
+      });
+
+      companyMap.forEach((coRecords, coName) => {
+        rows.push([`>>> [ ${coName.toUpperCase()} ]`, `Total: ${coRecords.length} Cadets`]);
+        const pltMap = new Map();
+        coRecords.forEach(r => {
+          const p = r.cadets?.profiles || {};
+          const plt = (p.platoon || '').trim() || 'Unassigned Platoon';
+          if (!pltMap.has(plt)) pltMap.set(plt, []);
+          pltMap.get(plt).push(r);
+        });
+
+        pltMap.forEach((pltRecords, pltName) => {
+          rows.push([`--- ${pltName} ---`]);
+          rows.push(["No.", "Last Name", "First Name", "Student ID", "Course", "Section", "Time-In", "Method", "Status"]);
+
+          pltRecords.forEach((r, i) => {
+            const p = r.cadets?.profiles || {};
+            rows.push([
+              i + 1,
+              `"${p.last_name || ''}"`,
+              `"${p.first_name || ''}"`,
+              `"${p.student_id || ''}"`,
+              `"${p.course || ''}"`,
+              `"${p.section || ''}"`,
+              `"${r.scanned_at ? new Date(r.scanned_at).toLocaleTimeString('en-PH', { hour12: false }) : ''}"`,
+              `"QR"`,
+              `"${(r.status || 'present').toUpperCase()}"`
+            ]);
+          });
+          rows.push([]);
+        });
+      });
+
+      const allLines = [
+        ...meta.map(row => row.map(v => `"${v}"`).join(',')),
+        ...rows.map(row => row.join(','))
+      ];
+
+      const csvContent = "data:text/csv;charset=utf-8,\uFEFF" + allLines.join('\n');
+      const link = document.createElement("a");
+      link.href = encodeURI(csvContent);
+      link.download = `ROTC_Grouped_Attendance_${sessionLabel.replace(/[^a-z0-9]/gi,'_')}_${now.toISOString().split('T')[0]}.csv`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    }
+
+    // ================================================================
+    // COPY DATA (TSV for Excel paste)
+    // ================================================================
+    function copyTableData() {
+      if (reportData.length === 0) {
+        alert("No records to copy.");
+        return;
+      }
+      const headers = ["#", "Last Name", "First Name", "Student ID", "Course", "Section", "Company", "Platoon", "Time-In", "Status"];
+      const rows = reportData.map((r, i) => {
+        const p = r.cadets?.profiles || {};
+        return [
+          i + 1,
+          p.last_name  || '',
+          p.first_name || '',
+          p.student_id || '',
+          p.course     || '',
+          p.section    || '',
+          p.company    || '',
+          p.platoon    || '',
+          r.scanned_at ? new Date(r.scanned_at).toLocaleTimeString('en-PH', { hour12: false }) : '',
+          (r.status || '').toUpperCase(),
+        ];
+      });
+
+      const tsv = [headers, ...rows].map(r => r.join('\t')).join('\n');
+      navigator.clipboard.writeText(tsv).then(() => {
+        const fb = document.getElementById("copy-feedback");
+        fb.style.display = "inline-flex";
+        setTimeout(() => { fb.style.display = "none"; }, 3000);
+      });
+    }
+  
+    // ========================================================================
+    // EXCEL ACTION CENTER CONTROLLER (DOWNLOAD .XLSX, VIEW SPREADSHEET, ARCHIVE)
+    // ========================================================================
+    function openExcelActionCenter() {
+      const modal = document.getElementById("modal-excel-center");
+      if (!modal) return;
+
+      const sessionSel = document.getElementById("report-session");
+      const sessionLabel = sessionSel?.options[sessionSel.selectedIndex]?.text || "All Formations";
+      const count = (reportData || []).length;
+
+      const subEl = document.getElementById("excel-center-subtitle");
+      if (subEl) {
+        subEl.textContent = `${sessionLabel} • ${count} Cadet Records Loaded`;
+      }
+
+      const statusEl = document.getElementById("excel-archive-status");
+      if (statusEl) statusEl.style.display = "none";
+
+      modal.classList.add("active");
+    }
+
+    function closeExcelModals() {
+      const modal = document.getElementById("modal-excel-center");
+      if (modal) modal.classList.remove("active");
+    }
+
+    function closeSpreadsheetViewer() {
+      const modal = document.getElementById("modal-spreadsheet-viewer");
+      if (modal) modal.classList.remove("active");
+    }
+
+    function handleModalBackdropClick(e, modalId) {
+      if (e.target.id === modalId) {
+        document.getElementById(modalId)?.classList.remove("active");
+      }
+    }
+
+    // Helper: Build Structured 2D Array of the Report for SheetJS
+    function buildExcelDataArray() {
+      const sessionSel = document.getElementById("report-session");
+      const sessionLabel = sessionSel?.options[sessionSel.selectedIndex]?.text || "All Formations";
+      const now = new Date();
+      const dateStr = now.toLocaleDateString("en-PH", { year:"numeric", month:"long", day:"numeric" });
+      const timeStr = now.toLocaleTimeString("en-PH", { hour:"2-digit", minute:"2-digit" });
+
+      const total   = reportData.length;
+      const present = reportData.filter(r => (r.status||'').toUpperCase()==='PRESENT').length;
+      const late    = reportData.filter(r => (r.status||'').toUpperCase()==='LATE').length;
+      const absent  = reportData.filter(r => (r.status||'').toUpperCase()==='ABSENT').length;
+      const rate    = total > 0 ? Math.round(((present + late) / total) * 100) : 0;
+
+      const rows = [];
+
+      // HEADQUARTERS HEADER
+      rows.push(["HEADQUARTERS"]);
+      rows.push(["ILOILO STATE UNIVERSITY OF FISHERIES SCIENCE AND TECHNOLOGY ROTC UNIT"]);
+      rows.push(["604TH (ILO) COMMUNITY DEFENSE CENTER, 6RCDG, RESCOM, PA"]);
+      rows.push(["SAN ENRIQUE, ILOILO"]);
+      rows.push([]);
+      rows.push(["OFFICIAL ROSTER OF ATTENDANCE & PARADE DRILL RECORD"]);
+      rows.push(["Session / Drill:", sessionLabel, "Date Exported:", `${dateStr} ${timeStr}`, "S.Y. 2026-2027"]);
+      rows.push(["Total Roster:", total, "Present:", present, "Late:", late, "Absent:", absent, "Turnout Rate:", `${rate}%`]);
+      rows.push([]);
+
+      // Group by Company & Platoon
+      const companyMap = new Map();
+      reportData.forEach(r => {
+        const p = r.cadets?.profiles || {};
+        const co = (p.company || '').trim() || 'Other / Unassigned';
+        if (!companyMap.has(co)) companyMap.set(co, []);
+        companyMap.get(co).push(r);
+      });
+
+      const sortedCompanies = Array.from(companyMap.keys()).sort();
+
+      sortedCompanies.forEach(coName => {
+        const coRecords = companyMap.get(coName);
+        rows.push([`>>> COMPANY: ${coName.toUpperCase()} (Total: ${coRecords.length})`]);
+
+        // Subgroup by Platoon
+        const pltMap = new Map();
+        coRecords.forEach(r => {
+          const p = r.cadets?.profiles || {};
+          const plt = (p.platoon || '').trim() || 'General Platoon';
+          if (!pltMap.has(plt)) pltMap.set(plt, []);
+          pltMap.get(plt).push(r);
+        });
+
+        const sortedPlatoons = Array.from(pltMap.keys()).sort();
+
+        sortedPlatoons.forEach(pltName => {
+          const pltRecords = pltMap.get(pltName);
+          rows.push([`  -- Platoon: ${pltName} (${pltRecords.length} Cadets) --`]);
+          // Table Column Headers
+          rows.push(["#", "Cadet Full Name", "Student ID", "Course & Section", "Unit (Co / Plt)", "Time-In", "Method", "Status", "Remarks / Signature"]);
+
+          pltRecords.forEach((r, idx) => {
+            const p = r.cadets?.profiles || {};
+            const fullName = `${p.last_name || ''}, ${p.first_name || ''}`.replace(/^, /, '') || 'Unknown';
+            const course = `${p.course || ''} ${p.section ? '('+p.section+')' : ''}`.trim() || '—';
+            const unit = `${p.company || ''} • ${p.platoon || ''}`.trim();
+            const timeIn = r.scanned_at ? new Date(r.scanned_at).toLocaleTimeString('en-PH', {hour:'2-digit', minute:'2-digit', second:'2-digit'}) : '—';
+            const status = (r.status || 'PRESENT').toUpperCase();
+
+            rows.push([
+              idx + 1,
+              fullName,
+              p.student_id || '—',
+              course,
+              unit,
+              timeIn,
+              'QR Scanner',
+              status,
+              '' // Signature blank
+            ]);
+          });
+          rows.push([]);
+        });
+      });
+
+      // Signature Block
+      rows.push([]);
+      rows.push(["PLATOON LEADER", "", "S1 ADJUTANT / CLERK", "", "COMMANDANT / DMST OFFICER"]);
+      rows.push(["Prepared by / Duty Officer", "", "Attested by", "", "Approved by"]);
+
+      return rows;
+    }
+
+    // 1. DOWNLOAD REAL EXCEL (.XLSX)
+    function downloadExcelWorkbook() {
+      if (!window.XLSX) {
+        alert("Excel generator library is still loading. Please try again in a second.");
+        return;
+      }
+      if (!reportData || reportData.length === 0) {
+        alert("No attendance records to export. Please adjust your filters.");
+        return;
+      }
+
+      const rows = buildExcelDataArray();
+      const ws = XLSX.utils.aoa_to_sheet(rows);
+
+      // Auto-fit column widths
+      ws['!cols'] = [
+        { wch: 6 },  // #
+        { wch: 28 }, // Name
+        { wch: 16 }, // Student ID
+        { wch: 24 }, // Course
+        { wch: 22 }, // Unit
+        { wch: 14 }, // Time-in
+        { wch: 12 }, // Method
+        { wch: 12 }, // Status
+        { wch: 24 }, // Remarks
+      ];
+
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, "Attendance Ledger");
+
+      const sessionSel = document.getElementById("report-session");
+      const sessionLabel = (sessionSel?.options[sessionSel.selectedIndex]?.text || "Attendance_Report").replace(/[^a-zA-Z0-9_-]/g, '_');
+      const now = new Date().toISOString().split('T')[0];
+      const fileName = `ROTCIMS_${sessionLabel}_${now}.xlsx`;
+
+      XLSX.writeFile(wb, fileName);
+      closeExcelModals();
+    }
+
+    // 2. VIEW INTERACTIVE SPREADSHEET
+    function viewInteractiveSpreadsheet() {
+      closeExcelModals();
+      const modal = document.getElementById("modal-spreadsheet-viewer");
+      if (!modal) return;
+
+      const sessionSel = document.getElementById("report-session");
+      const sessionLabel = sessionSel?.options[sessionSel.selectedIndex]?.text || "All Formations";
+      document.getElementById("viewer-sheet-title").textContent = `Spreadsheet Preview — ${sessionLabel}`;
+      document.getElementById("viewer-sheet-count").textContent = `${reportData.length} Cadet Rows`;
+
+      renderSpreadsheetGrid(reportData);
+      modal.classList.add("active");
+    }
+
+    function renderSpreadsheetGrid(data) {
+      const container = document.getElementById("spreadsheet-grid-container");
+      if (!container) return;
+
+      if (!data || data.length === 0) {
+        container.innerHTML = `
+          <div style="text-align:center; padding:3rem; color:#94a3b8;">
+            <i class="fa-solid fa-table-cells" style="font-size:2rem; opacity:0.3; margin-bottom:0.5rem; display:block;"></i>
+            No records to display in spreadsheet preview.
+          </div>
+        `;
+        return;
+      }
+
+      let html = `
+        <table class="spreadsheet-grid-table">
+          <thead>
+            <tr>
+              <th style="width:40px; text-align:center;">Row</th>
+              <th style="width:40px; text-align:center;">#</th>
+              <th>Cadet Full Name</th>
+              <th>Student ID</th>
+              <th>Course &amp; Section</th>
+              <th>Company &amp; Platoon</th>
+              <th>Time-In</th>
+              <th style="text-align:center;">Method</th>
+              <th style="text-align:center;">Status</th>
+            </tr>
+          </thead>
+          <tbody>
+      `;
+
+      data.forEach((r, idx) => {
+        const p = r.cadets?.profiles || {};
+        const fullName = `${p.last_name || ''}, ${p.first_name || ''}`.replace(/^, /, '') || 'Unknown';
+        const course = `${p.course || ''} ${p.section ? '('+p.section+')' : ''}`.trim() || '—';
+        const unit = `${p.company || ''} • ${p.platoon || ''}`.trim() || '—';
+        const timeIn = r.scanned_at ? new Date(r.scanned_at).toLocaleTimeString('en-PH', {hour:'2-digit', minute:'2-digit', second:'2-digit'}) : '—';
+        const st = (r.status || 'PRESENT').toUpperCase();
+
+        const badgeColor = st === 'PRESENT' ? '#4ade80' : (st === 'LATE' ? '#fde047' : '#f87171');
+        const badgeBg = st === 'PRESENT' ? 'rgba(34,197,94,0.2)' : (st === 'LATE' ? 'rgba(234,179,8,0.2)' : 'rgba(239,68,68,0.2)');
+
+        html += `
+          <tr>
+            <td style="text-align:center; color:#64748b; font-family:monospace; background:rgba(255,255,255,0.02);">${idx + 1}</td>
+            <td style="text-align:center; color:#94a3b8; font-weight:700;">${idx + 1}</td>
+            <td style="font-weight:700; color:#ffffff;">${fullName}</td>
+            <td style="color:#fbbf24; font-family:monospace;">${p.student_id || '—'}</td>
+            <td style="color:#cbd5e1;">${course}</td>
+            <td style="color:#94a3b8;">${unit}</td>
+            <td style="color:#e2e8f0; font-family:monospace;">${timeIn}</td>
+            <td style="text-align:center;"><span style="font-size:0.7rem; color:#94a3b8; background:rgba(255,255,255,0.06); padding:0.1rem 0.4rem; border-radius:3px;">QR</span></td>
+            <td style="text-align:center;">
+              <span style="display:inline-block; font-size:0.68rem; font-weight:800; padding:0.15rem 0.5rem; border-radius:4px; background:${badgeBg}; color:${badgeColor}; border:1px solid ${badgeColor};">
+                ${st}
+              </span>
+            </td>
+          </tr>
+        `;
+      });
+
+      html += `</tbody></table>`;
+      container.innerHTML = html;
+    }
+
+    function filterSpreadsheetGrid() {
+      const q = (document.getElementById("viewer-sheet-search")?.value || '').toLowerCase().trim();
+      if (!q) {
+        renderSpreadsheetGrid(reportData);
+        return;
+      }
+      const filtered = (reportData || []).filter(r => {
+        const p = r.cadets?.profiles || {};
+        const name = `${p.first_name || ''} ${p.last_name || ''}`.toLowerCase();
+        const sid = (p.student_id || '').toLowerCase();
+        const co = (p.company || '').toLowerCase();
+        const plt = (p.platoon || '').toLowerCase();
+        return name.includes(q) || sid.includes(q) || co.includes(q) || plt.includes(q);
+      });
+      renderSpreadsheetGrid(filtered);
+    }
+
+    // 3. ARCHIVE TO DOCUMENTS LIBRARY (SUPABASE + LOCAL STORAGE)
+    async function archiveToDocumentsCenter() {
+      const btn = document.getElementById("btn-archive-ledger");
+      if (btn) {
+        btn.disabled = true;
+        btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Archiving...';
+      }
+
+      try {
+        if (!window.XLSX) throw new Error("Excel generator library not ready.");
+        if (!reportData || reportData.length === 0) throw new Error("No attendance records to archive.");
+
+        const rows = buildExcelDataArray();
+        const ws = XLSX.utils.aoa_to_sheet(rows);
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, "Attendance Ledger");
+
+        // Generate Base64
+        const base64Data = XLSX.write(wb, { bookType: 'xlsx', type: 'base64' });
+
+        const sessionSel = document.getElementById("report-session");
+        const sessionLabel = sessionSel?.options[sessionSel.selectedIndex]?.text || "Attendance Drill Formation";
+        const now = new Date();
+        const dateStr = now.toISOString().split('T')[0];
+        const fileName = `ROTCIMS_Attendance_${sessionLabel.replace(/[^a-zA-Z0-9_-]/g, '_')}_${dateStr}.xlsx`;
+
+        const total   = reportData.length;
+        const present = reportData.filter(r => (r.status||'').toUpperCase()==='PRESENT').length;
+        const late    = reportData.filter(r => (r.status||'').toUpperCase()==='LATE').length;
+        const rate    = total > 0 ? Math.round(((present + late) / total) * 100) : 0;
+
+        const officer = (typeof Auth !== 'undefined' && Auth.currentUser) ? Auth.currentUser : null;
+
+        const docPayload = {
+          title: `Official Attendance Ledger — ${sessionLabel} (${dateStr})`,
+          description: `AFP & DepEd compliant formation attendance ledger. Total: ${total}, Turnout: ${rate}%. Recorded by Command Staff.`,
+          category: "Attendance & Drill Reports",
+          subject: "Attendance & Drill Reports",
+          access_level: "admin",
+          file_path: `data:application/vnd.openxmlformats-officedocument.spreadsheetml.sheet;base64,${base64Data}`,
+          file_name: fileName,
+          file_type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+          file_size_bytes: Math.round(base64Data.length * 0.75),
+          uploaded_by: officer?.id || null,
+          created_at: now.toISOString()
+        };
+
+        // Insert into Supabase documents table
+        const { error: insErr } = await window.supabaseClient
+          .from("documents")
+          .insert(docPayload);
+
+        if (insErr) {
+          console.warn("Supabase documents table insert error (falling back to local archive):", insErr.message);
+        }
+
+        // Cache in localStorage archive so it persists even without cloud table permissions
+        const localArchives = JSON.parse(localStorage.getItem("rotcims_archived_ledgers") || "[]");
+        localArchives.unshift({
+          id: 'arch-' + Date.now(),
+          title: docPayload.title,
+          fileName: fileName,
+          date: dateStr,
+          recordsCount: total,
+          fileData: docPayload.file_path
+        });
+        localStorage.setItem("rotcims_archived_ledgers", JSON.stringify(localArchives.slice(0, 30)));
+
+        // Show status banner in modal
+        const statusEl = document.getElementById("excel-archive-status");
+        const statusText = document.getElementById("excel-archive-status-text");
+        if (statusEl && statusText) {
+          statusText.textContent = `Archived "${fileName}" successfully to Documents Library!`;
+          statusEl.style.display = "flex";
+        }
+
+      } catch(err) {
+        console.error("Archive error:", err);
+        alert("Failed to archive: " + err.message);
+      } finally {
+        if (btn) {
+          btn.disabled = false;
+          btn.innerHTML = '<i class="fa-solid fa-folder-plus"></i> Archive Ledger';
+        }
+      }
+    }
+
+  
+
+    // =========================================================
+    // REPORT TABS
+    // =========================================================
+    function switchReportTab(tab) {
+      ['ledger','archive'].forEach(t => {
+        document.getElementById('tab-'+t)?.classList.toggle('active', t===tab);
+        document.getElementById('tab-btn-'+t)?.classList.toggle('active', t===tab);
+      });
+      if (tab === 'archive') renderArchiveLibrary();
+    }
+
+    // =========================================================
+    // FILE ARCHIVE LIBRARY
+    // =========================================================
+    let _activeArchiveFile = null;
+
+    function getArchives() {
+      return JSON.parse(localStorage.getItem('rotcims_report_files') || '[]');
+    }
+
+    function formatIcon(fmt) {
+      const map = {
+        XLSX: ['fa-file-excel','file-type-xlsx'],
+        CSV:  ['fa-file-csv','file-type-csv'],
+        PDF:  ['fa-file-pdf','file-type-pdf'],
+        DOCX: ['fa-file-word','file-type-docx'],
+      };
+      return map[fmt] || ['fa-file','file-type-xlsx'];
+    }
+
+    function renderArchiveLibrary() {
+      let archives = getArchives();
+
+      // If user hasn\'t exported anything yet, seed standard official curriculum and ledger files (matching screenshot)
+      if (archives.length === 0) {
+        archives = [
+          {
+            id: 'file-doc-1',
+            name: 'Military Science 1 (MS-1) — Military Courtesy, Discipline & Interior Guard Duty',
+            sub_file: 'MS1_Lesson_1_Courtesy_and_Discipline.docx',
+            format: 'DOCX',
+            category: 'MS-1',
+            audience: 'COMMAND ONLY',
+            size: '1.4 MB',
+            date: '19/10/2026',
+            status: 'PUBLISHED'
+          },
+          {
+            id: 'file-doc-2',
+            name: 'Cadet Formation Attendance & Merit Score Ledger 2026',
+            sub_file: 'Cadet_Formation_Ledger_2026.xlsx',
+            format: 'XLSX',
+            category: 'FORMS',
+            audience: 'COMMAND ONLY',
+            size: '822.3 KB',
+            date: '17/10/2026',
+            status: 'PUBLISHED'
+          },
+          {
+            id: 'file-doc-3',
+            name: 'AFP Manual on Drill & Ceremonies (Squad & Platoon Formations)',
+            sub_file: 'AFP_Drill_and_Ceremonies_Doctrine.pdf',
+            format: 'PDF',
+            category: 'DRILL & CEREMONIES',
+            audience: 'COMMAND ONLY',
+            size: '3.3 MB',
+            date: '15/10/2026',
+            status: 'PUBLISHED'
+          },
+          {
+            id: 'file-doc-4',
+            name: 'Military Map Reading, Land Navigation & Grid Coordinates',
+            sub_file: 'Military_Map_Reading_and_Land_Navigation.pptx',
+            format: 'PPTX',
+            category: 'TACTICS',
+            audience: 'COMMAND ONLY',
+            size: '4 MB',
+            date: '13/10/2026',
+            status: 'PUBLISHED'
+          }
+        ];
+      }
+
+      const query = (document.getElementById('archive-search')?.value || '').toLowerCase();
+      const badge = document.getElementById('archive-count-badge');
+      if (badge) badge.textContent = archives.length;
+
+      const tbody = document.getElementById('archive-table-tbody');
+      if (!tbody) return;
+
+      const filtered = archives.filter(f =>
+        f.name.toLowerCase().includes(query) ||
+        (f.sub_file||'').toLowerCase().includes(query) ||
+        (f.category||'').toLowerCase().includes(query) ||
+        (f.format||'').toLowerCase().includes(query)
+      );
+
+      if (filtered.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="8" style="text-align:center;padding:2.5rem;color:var(--portal-muted);">No documents or files match your search.</td></tr>`;
+        return;
+      }
+
+      const formatBadges = {
+        DOCX: { color: '#0284c7', bg: 'rgba(2, 132, 199, 0.12)', icon: 'fa-file-word' },
+        XLSX: { color: '#16a34a', bg: 'rgba(22, 163, 74, 0.12)', icon: 'fa-file-excel' },
+        PDF:  { color: '#dc2626', bg: 'rgba(220, 38, 38, 0.12)', icon: 'fa-file-pdf' },
+        PPTX: { color: '#ea580c', bg: 'rgba(234, 88, 12, 0.12)', icon: 'fa-file-powerpoint' },
+        CSV:  { color: '#0284c7', bg: 'rgba(2, 132, 199, 0.12)', icon: 'fa-file-csv' },
+      };
+
+      tbody.innerHTML = filtered.map(f => {
+        const fmt = (f.format || 'XLSX').toUpperCase();
+        const b = formatBadges[fmt] || formatBadges.XLSX;
+        const uploadDate = f.date || (f.created_at ? new Date(f.created_at).toLocaleDateString('en-GB') : '19/10/2026');
+        const sizeLabel = f.size || (f.record_count ? `${f.record_count * 12} KB` : '1.2 MB');
+        const subFileName = f.sub_file || `${f.name}.${fmt.toLowerCase()}`;
+
+        return `
+          <tr>
+            <td>
+              <div style="display:flex;align-items:center;gap:0.75rem;">
+                <div style="font-size:1.45rem;width:32px;text-align:center;color:${b.color};">
+                  <i class="fa-solid ${b.icon}"></i>
+                </div>
+                <div>
+                  <div style="font-weight:700;color:var(--portal-ink);line-height:1.3;">${f.name}</div>
+                  <div style="font-size:0.75rem;color:var(--portal-muted);font-family:monospace;margin-top:0.15rem;">${subFileName}</div>
+                </div>
+              </div>
+            </td>
+            <td style="text-align:center;">
+              <span style="font-weight:700;font-size:0.72rem;padding:0.25rem 0.65rem;border-radius:6px;background:${b.bg};color:${b.color};border:1px solid ${b.color}40;">
+                <i class="fa-solid ${b.icon}" style="margin-right:0.2rem;"></i> ${fmt}
+              </span>
+            </td>
+            <td style="text-align:center;">
+              <span class="badge badge-admin" style="font-size:0.72rem;letter-spacing:0.04em;">${(f.category || 'Forms').toUpperCase()}</span>
+            </td>
+            <td style="text-align:center;">
+              <span style="font-size:0.72rem;font-weight:700;padding:0.25rem 0.65rem;border-radius:9999px;background:rgba(56,189,248,0.12);color:#0284c7;border:1px solid rgba(56,189,248,0.3);">
+                ${f.audience || 'COMMAND ONLY'}
+              </span>
+            </td>
+            <td style="font-family:monospace;font-size:0.8rem;font-weight:600;">${sizeLabel}</td>
+            <td style="font-size:0.78rem;color:var(--portal-muted);">${uploadDate}</td>
+            <td style="text-align:center;">
+              <span class="badge badge-approved" style="font-size:0.72rem;">PUBLISHED</span>
+            </td>
+            <td style="text-align:right;white-space:nowrap;">
+              <button onclick="downloadArchiveAs('${f.id}','${fmt.toLowerCase()}')" class="btn btn-outline btn-sm" title="Download file" style="padding:0.35rem 0.6rem;">
+                <i class="fa-solid fa-download"></i>
+              </button>
+              <button onclick="viewArchiveFile('${f.id}')" class="btn btn-outline btn-sm" title="Preview / Open document" style="padding:0.35rem 0.6rem;margin-left:0.25rem;">
+                <i class="fa-solid fa-eye"></i>
+              </button>
+            </td>
+          </tr>
+        `;
+      }).join('');
+    }
+
+    function deleteArchive(id) {
+      const archives = getArchives().filter(f => f.id !== id);
+      localStorage.setItem('rotcims_report_files', JSON.stringify(archives));
+      renderArchiveLibrary();
+    }
+
+    function clearAllArchives() {
+      if (!confirm('Delete all saved report files? This cannot be undone.')) return;
+      localStorage.removeItem('rotcims_report_files');
+      renderArchiveLibrary();
+    }
+
+    async function viewArchiveFile(id) {
+      _activeArchiveFile = getArchives().find(f => f.id === id);
+      if (!_activeArchiveFile) return;
+
+      // Load data from the session referenced in the file
+      const sessId = _activeArchiveFile.session_id;
+      let { data: recs } = await window.supabaseClient
+        .from('attendance_records')
+        .select('id, status, scanned_at, cadet_id, profiles:cadet_id(first_name,last_name,student_id,course,section,company,platoon)')
+        .eq(sessId && sessId !== 'all' ? 'session_id' : 'id', sessId && sessId !== 'all' ? sessId : '00000000-0000-0000-0000-000000000000');
+
+      if (!recs) recs = [];
+
+      const title = document.getElementById('archive-viewer-title');
+      if (title) title.textContent = _activeArchiveFile.name + '.' + (_activeArchiveFile.format||'XLSX').toLowerCase();
+
+      const viewer = document.getElementById('archive-viewer-grid');
+      if (!viewer) return;
+
+      if (recs.length === 0) {
+        viewer.innerHTML = '<div style="padding:2rem;text-align:center;color:var(--portal-muted);">No records found for this session.</div>';
+      } else {
+        const headers = ['#','Full Name','Student ID','Course','Section','Company','Platoon','Status','Time-In'];
+        const rows = recs.map((r,i) => {
+          const p = r.profiles || {};
+          const name = [p.first_name, p.last_name].filter(Boolean).join(', ');
+          const tim = r.scanned_at ? new Date(r.scanned_at).toLocaleTimeString('en-PH') : '—';
+          return [i+1, name||'—', p.student_id||'—', p.course||'—', p.section||'—', p.company||'—', p.platoon||'—', r.status||'—', tim];
+        });
+
+        viewer.innerHTML = `<table style="width:100%;border-collapse:collapse;font-size:0.82rem;">
+          <thead style="position:sticky;top:0;z-index:2;">
+            <tr>${headers.map(h=>`<th style="padding:0.55rem 0.75rem;background:var(--portal-border-subtle);color:var(--portal-ink);font-weight:700;text-align:left;border-bottom:2px solid var(--portal-border);white-space:nowrap;">${h}</th>`).join('')}</tr>
+          </thead>
+          <tbody>
+            ${rows.map((row,ri)=>`<tr style="background:${ri%2===0?'transparent':'var(--portal-border-subtle)'}">
+              ${row.map(cell=>`<td style="padding:0.45rem 0.75rem;border-bottom:1px solid var(--portal-border);color:var(--portal-ink);">${cell}</td>`).join('')}
+            </tr>`).join('')}
+          </tbody>
+        </table>`;
+      }
+
+      document.getElementById('archive-inline-viewer').style.display = 'block';
+      document.getElementById('archive-inline-viewer').scrollIntoView({behavior:'smooth'});
+    }
+
+    function downloadArchiveAs(id, fmt) {
+      _activeArchiveFile = getArchives().find(f => f.id === id);
+      archiveDownload(fmt);
+    }
+
+    function archiveDownload(fmt) {
+      if (!_activeArchiveFile) return;
+      const fileName = _activeArchiveFile.name;
+
+      if (fmt === 'xlsx') {
+        if (!window.XLSX) { alert('Excel library loading. Try again in a moment.'); return; }
+        viewArchiveFile(_activeArchiveFile.id).then(() => {
+          const tbl = document.querySelector('#archive-viewer-grid table');
+          if (!tbl) return;
+          const wb = XLSX.utils.book_new();
+          const ws = XLSX.utils.table_to_sheet(tbl);
+          XLSX.utils.book_append_sheet(wb, ws, 'Attendance');
+          XLSX.writeFile(wb, fileName + '.xlsx');
+        });
+        return;
+      }
+
+      if (fmt === 'csv') {
+        const tbl = document.querySelector('#archive-viewer-grid table');
+        if (!tbl) { viewArchiveFile(_activeArchiveFile.id).then(()=>archiveDownload('csv')); return; }
+        let csv = '';
+        tbl.querySelectorAll('tr').forEach(row => {
+          const cols = [...row.querySelectorAll('th,td')].map(c => '"' + c.textContent.replace(/"/g,'""') + '"');
+          csv += cols.join(',') + '\n';
+        });
+        const blob = new Blob([csv], {type:'text/csv'});
+        const a = document.createElement('a'); a.href = URL.createObjectURL(blob);
+        a.download = fileName + '.csv'; a.click();
+        return;
+      }
+
+      if (fmt === 'pdf') {
+        const tbl = document.querySelector('#archive-viewer-grid table');
+        if (!tbl) { viewArchiveFile(_activeArchiveFile.id).then(()=>archiveDownload('pdf')); return; }
+        const win = window.open('', '_blank');
+        win.document.write(`<!DOCTYPE html><html><head><title>${fileName}</title><style>body{font-family:Arial,sans-serif;font-size:11px;margin:20px;}h2{font-size:14px;margin-bottom:8px;}table{width:100%;border-collapse:collapse;}th,td{border:1px solid #ccc;padding:4px 8px;text-align:left;}th{background:#f3f4f6;font-weight:bold;}</style></head><body><h2>ROTCIMS Attendance Report - ${fileName}</h2><p style="font-size:10px;color:#666;">Generated: ${new Date().toLocaleString('en-PH')} | ROTCIMS Official Document</p>${tbl.outerHTML}</body></html>`);
+        win.document.close();
+        win.focus();
+        setTimeout(() => { win.print(); }, 400);
+        return;
+      }
+    }
+
+    // Auto-check archive tab from URL
+    (function checkArchiveTab() {
+      const p = new URLSearchParams(window.location.search);
+      if (p.get('tab') === 'archive') {
+        setTimeout(() => switchReportTab('archive'), 300);
+      }
+      const archives = getArchives();
+      const badge = document.getElementById('archive-count-badge');
+      if (badge) badge.textContent = archives.length;
+    })();
+  </script>
+</body>
+</html>

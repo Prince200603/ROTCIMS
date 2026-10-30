@@ -1,0 +1,951 @@
+<!--
+  =============================================================================
+  FILE: admin-create-officer.html
+  PROJECT: ROTCIMS — San Enrique ROTC
+  PURPOSE: Admin-Only Commissioning & Creation of ROTC Officer Accounts.
+  SPECIFICATION COMPLIANCE:
+    • Section 2: Layout & Visual Design identical to Cadet Sign-Up (register.html)
+    • Section 3: Dynamic Officer Class & Position Selection
+    • Section 4 & 5: Admin-Only Access & Centralized Role-Based Provisioning
+    • Section 11: Non-destructive Supabase Auth provisioning (Admin remains signed in)
+  =============================================================================
+-->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Commission Officer Account — ROTCIMS Command Staff</title>
+
+  <!-- Global ROTCIMS stylesheets -->
+  <link rel="stylesheet" href="css/style.css">
+  <link rel="stylesheet" href="css/responsive.css">
+  <link rel="stylesheet" href="css/enhancements.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="js/config.js"></script>
+  <script src="js/auth.js"></script>
+  <script src="js/rbac.js"></script>
+
+  <style>
+    body {
+      min-height: 100vh;
+      background: linear-gradient(135deg, #0a170f 0%, #122419 45%, #1e3a29 100%);
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      color: #111827;
+      padding-bottom: 4rem;
+    }
+
+    .reg-header {
+      background: rgba(18, 36, 25, 0.95);
+      backdrop-filter: blur(10px);
+      -webkit-backdrop-filter: blur(10px);
+      border-bottom: 1px solid rgba(184, 142, 44, 0.25);
+      padding: 0.85rem 2rem;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      position: sticky;
+      top: 0;
+      z-index: 40;
+    }
+
+    .reg-hero {
+      text-align: center;
+      padding: 2.75rem 1.5rem 1.5rem;
+      color: #fff;
+    }
+
+    .reg-hero h1 {
+      font-family: 'Oswald', sans-serif;
+      font-size: clamp(2rem, 4vw, 2.75rem);
+      color: #fff;
+      letter-spacing: 0.02em;
+      margin-bottom: 0.5rem;
+    }
+
+    .reg-hero p {
+      color: rgba(255, 255, 255, 0.78);
+      font-size: 0.95rem;
+      max-width: 680px;
+      margin: 0 auto;
+    }
+
+    .reg-container {
+      max-width: 1220px;
+      width: 100%;
+      margin: 0 auto;
+      padding: 0 1.5rem;
+    }
+
+    .reg-card {
+      background: #ffffff;
+      border-radius: 20px;
+      box-shadow: 0 20px 50px rgba(0, 0, 0, 0.35);
+      border: 1px solid rgba(184, 142, 44, 0.2);
+      overflow: hidden;
+    }
+
+    .step-banner {
+      background: #f9fafb;
+      border-bottom: 1px solid #e5e7eb;
+      padding: 1.25rem 2.5rem;
+      display: flex;
+      justify-content: space-between;
+      gap: 1rem;
+      flex-wrap: wrap;
+    }
+
+    .step-item {
+      display: flex;
+      align-items: center;
+      gap: 0.6rem;
+      font-size: 0.84rem;
+      font-weight: 600;
+      color: #4b5563;
+    }
+
+    .step-item.active {
+      color: #1e3a29;
+    }
+
+    .step-num {
+      width: 26px;
+      height: 26px;
+      border-radius: 50%;
+      background: #b88e2c;
+      color: #fff;
+      display: grid;
+      place-items: center;
+      font-size: 0.75rem;
+      font-weight: 700;
+    }
+
+    .reg-split-grid {
+      display: grid;
+      grid-template-columns: 310px 1fr;
+      gap: 2.25rem;
+      align-items: start;
+      padding: 2.25rem;
+    }
+
+    @media (max-width: 992px) {
+      .reg-split-grid {
+        grid-template-columns: 1fr;
+        gap: 1.5rem;
+        padding: 1.5rem;
+      }
+      .reg-container {
+        padding: 0 1rem;
+      }
+    }
+
+    .profile-pic-card {
+      background: #ffffff;
+      border-radius: 16px;
+    }
+
+    .avatar-preview-wrap {
+      width: 165px;
+      height: 165px;
+      border-radius: 50%;
+      border: 4px solid #b88e2c;
+      margin: 0 auto 1.25rem;
+      overflow: hidden;
+      background: #0f2416;
+      box-shadow: 0 8px 25px rgba(0,0,0,0.18);
+      position: relative;
+    }
+
+    .avatar-preview-wrap img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
+
+    .btn-select-photo {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0.5rem;
+      padding: 0.65rem 1.4rem;
+      background: #f0fdf4;
+      color: #1e3a29;
+      border: 1.5px solid rgba(184, 142, 44, 0.5);
+      border-radius: 999px;
+      font-weight: 700;
+      font-size: 0.85rem;
+      cursor: pointer;
+      width: 100%;
+      transition: all 0.2s ease;
+    }
+
+    .btn-select-photo:hover {
+      background: #dcfce7;
+      transform: translateY(-1px);
+    }
+
+    .photo-status-text {
+      font-size: 0.8rem;
+      color: #64748b;
+      text-align: center;
+      margin-top: 0.6rem;
+      line-height: 1.35;
+    }
+
+    .cadet-guidelines-box {
+      margin-top: 1.5rem;
+      background: #f8fafc;
+      border: 1px solid #e2e8f0;
+      border-radius: 12px;
+      padding: 1.15rem;
+    }
+
+    .cadet-guidelines-box h4 {
+      font-family: 'Oswald', sans-serif;
+      font-size: 0.95rem;
+      color: #1e3a29;
+      margin: 0 0 0.5rem 0;
+      display: flex;
+      align-items: center;
+      gap: 0.4rem;
+    }
+
+    .cadet-guidelines-box ul {
+      margin: 0;
+      padding-left: 1.2rem;
+      font-size: 0.78rem;
+      color: #475569;
+      line-height: 1.5;
+    }
+
+    .form-section-title {
+      font-family: 'Oswald', sans-serif;
+      font-size: 1.18rem;
+      letter-spacing: 0.04em;
+      color: #1e3a29;
+      border-bottom: 2px solid rgba(184, 142, 44, 0.25);
+      padding-bottom: 0.5rem;
+      margin-bottom: 1.25rem;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+
+    .input-icon-box {
+      position: relative;
+      display: flex;
+      align-items: center;
+    }
+
+    .input-icon-box i {
+      position: absolute;
+      left: 1rem;
+      color: #94a3b8;
+      font-size: 0.9rem;
+      pointer-events: none;
+    }
+
+    .input-icon-box input,
+    .input-icon-box select {
+      width: 100%;
+      padding: 0.72rem 1rem 0.72rem 2.6rem;
+      border: 1.5px solid #cbd5e1;
+      border-radius: 8px;
+      font-size: 0.9rem;
+      background: #ffffff;
+      color: #0f172a;
+      transition: all 0.2s ease;
+      font-family: inherit;
+    }
+
+    .input-icon-box input:focus,
+    .input-icon-box select:focus {
+      outline: none;
+      border-color: #1e3a29;
+      box-shadow: 0 0 0 3px rgba(30, 58, 41, 0.12);
+    }
+
+    .form-group {
+      margin-bottom: 1.15rem;
+    }
+
+    .form-group label {
+      display: block;
+      font-size: 0.8rem;
+      font-weight: 700;
+      color: #334155;
+      margin-bottom: 0.35rem;
+      text-transform: uppercase;
+      letter-spacing: 0.03em;
+    }
+
+    .officer-badge-preview {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+      padding: 0.5rem 1rem;
+      background: rgba(184, 142, 44, 0.12);
+      border: 1px solid rgba(184, 142, 44, 0.3);
+      border-radius: 8px;
+      font-size: 0.85rem;
+      font-weight: 700;
+      color: #b88e2c;
+      margin-top: 0.25rem;
+    }
+
+    .military-notice {
+      background: rgba(30, 58, 41, 0.06);
+      border-left: 4px solid #1e3a29;
+      padding: 0.9rem 1.1rem;
+      border-radius: 0 8px 8px 0;
+      font-size: 0.82rem;
+      color: #334155;
+      line-height: 1.45;
+      margin-bottom: 1.5rem;
+      display: flex;
+      gap: 0.75rem;
+      align-items: flex-start;
+    }
+
+    .btn-brass {
+      background: linear-gradient(135deg, #d4af37 0%, #b88e2c 100%);
+      color: #0c1810;
+      border: none;
+      border-radius: 10px;
+      font-weight: 700;
+      cursor: pointer;
+      box-shadow: 0 8px 20px rgba(184, 142, 44, 0.3);
+      transition: all 0.2s ease;
+    }
+
+    .btn-brass:hover {
+      background: linear-gradient(135deg, #dfb54e 0%, #c49931 100%);
+      transform: translateY(-2px);
+      box-shadow: 0 12px 25px rgba(184, 142, 44, 0.4);
+    }
+  </style>
+</head>
+<body>
+
+  <!-- ====== HEADER ====== -->
+  <header class="reg-header">
+    <div style="display: flex; align-items: center; gap: 0.75rem;">
+      <img src="assets/logo.png" alt="ROTCIMS Logo" style="height: 38px; width: 38px;" onerror="this.src='assets/icon.png'">
+      <div>
+        <div style="font-family: 'Oswald', sans-serif; font-size: 1.15rem; color: #fff; letter-spacing: 0.05em; line-height: 1.1;">
+          ROTCIMS <span style="color: #dfb54e; font-size: 0.75rem; font-weight: 400;">COMMAND OPERATIONS</span>
+        </div>
+        <div style="font-size: 0.7rem; color: rgba(255,255,255,0.7);">San Enrique ROTC Unit — Department of Military Science</div>
+      </div>
+    </div>
+    <a href="admin-accounts.html" style="color: #dfb54e; text-decoration: none; font-size: 0.84rem; font-weight: 700; display: flex; align-items: center; gap: 0.4rem; padding: 0.4rem 0.85rem; border: 1px solid rgba(223, 181, 78, 0.35); border-radius: 8px;">
+      <i class="fa-solid fa-arrow-left"></i> Back to Officer Governance
+    </a>
+  </header>
+
+  <!-- ====== HERO BANNER ====== -->
+  <div class="reg-hero">
+    <h1>Officer Commissioning &amp; Account Provisioning</h1>
+    <p>Administrative console for creating verified Officer accounts, assigning military positions, and configuring role-based privileges across command echelons.</p>
+  </div>
+
+  <!-- ====== MAIN CONTAINER ====== -->
+  <div class="reg-container">
+    <div class="reg-card">
+
+      <!-- Step Header Banner -->
+      <div class="step-banner">
+        <div class="step-item active">
+          <div class="step-num"><i class="fa-solid fa-camera" style="font-size: 0.7rem;"></i></div>
+          <span>Officer Portrait</span>
+        </div>
+        <div class="step-item active">
+          <div class="step-num">1</div>
+          <span>Identity &amp; Class</span>
+        </div>
+        <div class="step-item active">
+          <div class="step-num">2</div>
+          <span>Position Assignment</span>
+        </div>
+        <div class="step-item active">
+          <div class="step-num">3</div>
+          <span>System Credentials</span>
+        </div>
+      </div>
+
+      <!-- 2-Column Split Console -->
+      <form id="form-create-officer" onsubmit="handleCreateOfficer(event)">
+        <div class="reg-split-grid">
+
+          <!-- ====== LEFT COLUMN: PHOTO UPLOAD & GUIDELINES ====== -->
+          <div class="profile-pic-card">
+            <div style="text-align: center; margin-bottom: 1rem;">
+              <h3 style="font-family:'Oswald',sans-serif; font-size:1.1rem; color:#1e3a29; margin:0 0 0.25rem 0;">Officer Portrait</h3>
+              <p style="font-size:0.78rem; color:#64748b; margin:0;">Official uniform portrait for command digital credential badge.</p>
+            </div>
+
+            <div class="avatar-preview-wrap">
+              <img id="avatar-preview-img" src="assets/icon.png" alt="Officer Portrait" onerror="this.src='assets/logo.png'">
+            </div>
+
+            <input type="file" id="profile_photo_input" accept="image/png, image/jpeg, image/jpg, image/webp" style="display: none;" onchange="handlePhotoSelect(event)">
+            
+            <button type="button" class="btn-select-photo" onclick="document.getElementById('profile_photo_input').click()">
+              <i class="fa-solid fa-camera"></i> Select Uniform Photo
+            </button>
+
+            <div id="photo-status-text" class="photo-status-text">
+              Ready: select a 2x2 officer portrait. The system optimizes and securely encodes it.
+            </div>
+
+            <div class="cadet-guidelines-box">
+              <h4><i class="fa-solid fa-medal" style="color: var(--brass);"></i> Officer Portrait Specifications</h4>
+              <ul>
+                <li>Authorized ROTC Officer gala or duty uniform</li>
+                <li>Prescribed military grooming standards</li>
+                <li>Neutral or formal background</li>
+                <li>PNG, JPG, or WEBP formats up to 5MB</li>
+              </ul>
+            </div>
+
+            <div style="margin-top: 1.5rem; text-align: center;">
+              <span class="officer-badge-preview" id="preview-position-badge">
+                <i class="fa-solid fa-award"></i> Position: <span id="badge-pos-name">Unselected</span>
+              </span>
+            </div>
+          </div>
+
+          <!-- ====== RIGHT COLUMN: OFFICER INFORMATION FORM ====== -->
+          <div class="reg-main-col">
+
+            <!-- SECTION 1: IDENTITY & MILITARY RANK -->
+            <div class="form-section-title">
+              <i class="fa-solid fa-id-card-clip" style="color: var(--brass);"></i>
+              1. Officer Identity &amp; Command Classification
+            </div>
+
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem;">
+              <div class="form-group">
+                <label for="first_name"><i class="fa-solid fa-user"></i> First Name *</label>
+                <div class="input-icon-box">
+                  <i class="fa-solid fa-signature"></i>
+                  <input type="text" id="first_name" required placeholder="e.g. Juan">
+                </div>
+              </div>
+
+              <div class="form-group">
+                <label for="middle_name"><i class="fa-solid fa-user"></i> Middle Name</label>
+                <div class="input-icon-box">
+                  <i class="fa-solid fa-signature"></i>
+                  <input type="text" id="middle_name" placeholder="e.g. Dela">
+                </div>
+              </div>
+
+              <div class="form-group">
+                <label for="last_name"><i class="fa-solid fa-user"></i> Last Name *</label>
+                <div class="input-icon-box">
+                  <i class="fa-solid fa-signature"></i>
+                  <input type="text" id="last_name" required placeholder="e.g. Cruz">
+                </div>
+              </div>
+            </div>
+
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem;">
+              <div class="form-group">
+                <label for="student_id"><i class="fa-solid fa-hashtag"></i> Student / Officer ID *</label>
+                <div class="input-icon-box">
+                  <i class="fa-solid fa-barcode"></i>
+                  <input type="text" id="student_id" required placeholder="e.g. 24-00123">
+                </div>
+              </div>
+
+              <div class="form-group">
+                <label for="course"><i class="fa-solid fa-graduation-cap"></i> Degree Course</label>
+                <div class="input-icon-box">
+                  <i class="fa-solid fa-book-bookmark"></i>
+                  <select id="course">
+                    <option value="" disabled selected>-- Select Course --</option>
+                    <option value="BSIT">BSIT</option>
+                    <option value="BSOA">BSOA</option>
+                    <option value="BSHM">BSHM</option>
+                    <option value="BSA">BSA</option>
+                    <option value="BSED">BSED</option>
+                    <option value="Other">Other Degree Course</option>
+                  </select>
+                </div>
+              </div>
+
+              <div class="form-group">
+                <label for="year_level"><i class="fa-solid fa-layer-group"></i> Year Level</label>
+                <div class="input-icon-box">
+                  <i class="fa-solid fa-calendar-days"></i>
+                  <select id="year_level">
+                    <option value="1st Year">1st Year</option>
+                    <option value="2nd Year">2nd Year</option>
+                    <option value="3rd Year" selected>3rd Year</option>
+                    <option value="4th Year">4th Year</option>
+                  </select>
+                </div>
+              </div>
+            </div>
+
+            <!-- DYNAMIC CLASS & POSITION SELECTION -->
+            <div style="background: rgba(184, 142, 44, 0.07); border: 1.5px solid rgba(184, 142, 44, 0.35); border-radius: 12px; padding: 1.25rem; margin-bottom: 1.25rem;">
+              <div style="font-weight: 700; color: #1e3a29; font-size: 0.92rem; margin-bottom: 0.75rem; display: flex; align-items: center; gap: 0.45rem;">
+                <i class="fa-solid fa-sitemap" style="color: #b88e2c;"></i>
+                Dynamic Command Classification &amp; Position Assignment
+              </div>
+
+              <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 1rem;">
+                <!-- Officer Class -->
+                <div class="form-group" style="margin-bottom: 0;">
+                  <label for="officer_class"><i class="fa-solid fa-award"></i> Officer Class *</label>
+                  <div class="input-icon-box">
+                    <i class="fa-solid fa-medal"></i>
+                    <select id="officer_class" required onchange="onOfficerClassChange()">
+                      <option value="" disabled selected>-- Select Officer Class --</option>
+                      <option value="1st_class_officer">🥇 1st Class Officers</option>
+                      <option value="2nd_class_officer">🥈 2nd Class Officers</option>
+                      <option value="3rd_class_officer">🥉 3rd Class Officers</option>
+                      <option value="4th_class_officer">🏅 4th Class Officers</option>
+                      <option value="advance_officer">🎖️ Advance Officers</option>
+                    </select>
+                  </div>
+                </div>
+
+                <!-- Dynamic Position Dropdown -->
+                <div class="form-group" style="margin-bottom: 0;">
+                  <label for="officer_position"><i class="fa-solid fa-shield-halved"></i> Assigned Officer Position *</label>
+                  <div class="input-icon-box">
+                    <i class="fa-solid fa-user-shield"></i>
+                    <select id="officer_position" required onchange="onOfficerPositionChange()" disabled>
+                      <option value="" disabled selected>-- First Select Officer Class --</option>
+                    </select>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- UNIT ALLOCATIONS -->
+            <div id="unit-allocations-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 1rem; margin-bottom: 2rem;">
+              <div class="form-group" id="group-company">
+                <label for="company"><i class="fa-solid fa-shield"></i> Assigned Company *</label>
+                <div class="input-icon-box">
+                  <i class="fa-solid fa-flag"></i>
+                  <select id="company" required>
+                    <option value="Alpha Company" selected>Alpha Company</option>
+                    <option value="Bravo Company">Bravo Company</option>
+                    <option value="Charlie Company">Charlie Company</option>
+                    <option value="Delta Company">Delta Company</option>
+                    <option value="Medics Unit">Medics Unit</option>
+                    <option value="Headquarters (GHQ)">Headquarters (GHQ)</option>
+                  </select>
+                </div>
+                <small id="company-lock-msg" style="color:#b88e2c; font-size:0.75rem; display:none; margin-top:0.25rem; font-weight:600;">
+                  <i class="fa-solid fa-lock"></i> Automatically assigned to this company.
+                </small>
+              </div>
+
+              <div class="form-group" id="group-platoon">
+                <label for="platoon"><i class="fa-solid fa-users"></i> Assigned Platoon</label>
+                <div class="input-icon-box">
+                  <i class="fa-solid fa-sitemap"></i>
+                  <select id="platoon">
+                    <option value="Headquarters">Headquarters / Command Group</option>
+                    <option value="1st Platoon">1st Platoon</option>
+                    <option value="2nd Platoon">2nd Platoon</option>
+                    <option value="3rd Platoon">3rd Platoon</option>
+                    <option value="Alpha Platoon">Alpha Platoon</option>
+                  </select>
+                </div>
+                <small style="color:#64748b; font-size:0.75rem; display:block; margin-top:0.25rem;">
+                  Platoon Leaders record attendance strictly for their assigned platoon.
+                </small>
+              </div>
+            </div>
+
+            <!-- SECTION 2: PERSONAL & CONTACT DETAILS -->
+            <div class="form-section-title">
+              <i class="fa-solid fa-address-book" style="color: var(--brass);"></i>
+              2. Personal &amp; Emergency Details
+            </div>
+
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 1rem; margin-bottom: 1.25rem;">
+              <div class="form-group">
+                <label for="date_of_birth"><i class="fa-solid fa-cake-candles"></i> Date of Birth</label>
+                <div class="input-icon-box">
+                  <i class="fa-solid fa-calendar"></i>
+                  <input type="date" id="date_of_birth">
+                </div>
+              </div>
+
+              <div class="form-group">
+                <label for="phone"><i class="fa-solid fa-mobile-screen"></i> Contact Phone *</label>
+                <div class="input-icon-box">
+                  <i class="fa-solid fa-phone"></i>
+                  <input type="tel" id="phone" required placeholder="09170000000">
+                </div>
+              </div>
+            </div>
+
+            <div class="form-group" style="margin-bottom: 1.25rem;">
+              <label for="address"><i class="fa-solid fa-location-dot"></i> Permanent Residence</label>
+              <div class="input-icon-box">
+                <i class="fa-solid fa-map-pin"></i>
+                <input type="text" id="address" placeholder="Barangay, Municipality, Province">
+              </div>
+            </div>
+
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 1rem; margin-bottom: 2rem;">
+              <div class="form-group">
+                <label for="emergency_contact_name"><i class="fa-solid fa-person-breastfeeding"></i> Emergency Contact Name</label>
+                <div class="input-icon-box">
+                  <i class="fa-solid fa-user-shield"></i>
+                  <input type="text" id="emergency_contact_name" placeholder="Parent or Next of Kin">
+                </div>
+              </div>
+
+              <div class="form-group">
+                <label for="emergency_contact_phone"><i class="fa-solid fa-phone-volume"></i> Emergency Contact Phone</label>
+                <div class="input-icon-box">
+                  <i class="fa-solid fa-phone-flip"></i>
+                  <input type="tel" id="emergency_contact_phone" placeholder="09170000000">
+                </div>
+              </div>
+            </div>
+
+            <!-- SECTION 3: SYSTEM SECURITY CREDENTIALS -->
+            <div class="form-section-title">
+              <i class="fa-solid fa-lock" style="color: var(--brass);"></i>
+              3. Officer System Credentials &amp; Provisioning
+            </div>
+
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 1rem; margin-bottom: 1.25rem;">
+              <div class="form-group">
+                <label for="email"><i class="fa-solid fa-envelope"></i> Institutional Email *</label>
+                <div class="input-icon-box">
+                  <i class="fa-solid fa-at"></i>
+                  <input type="email" id="email" required placeholder="officer@sanenrique.edu.ph" autocomplete="email">
+                </div>
+              </div>
+
+              <div class="form-group">
+                <label for="password"><i class="fa-solid fa-key"></i> Initial Password (Min 8 Chars) *</label>
+                <div class="input-icon-box">
+                  <i class="fa-solid fa-lock"></i>
+                  <input type="password" id="password" required minlength="8" placeholder="••••••••" autocomplete="new-password">
+                </div>
+              </div>
+            </div>
+
+            <div class="military-notice">
+              <i class="fa-solid fa-shield-halved" style="font-size: 1.2rem; color: #b88e2c; margin-top: 2px;"></i>
+              <div>
+                <strong>Command Authorization Notice:</strong> Only authenticated Administrators are authorized to provision Officer accounts. The officer will be assigned active standing with role-based access restricted strictly according to their assigned military appointment.
+              </div>
+            </div>
+
+            <button type="submit" id="btn-submit" class="btn-brass" style="width: 100%; padding: 1.05rem; font-size: 1.08rem; font-family: 'Oswald', sans-serif; letter-spacing: 0.05em; display: flex; align-items: center; justify-content: center; gap: 0.6rem;">
+              <i class="fa-solid fa-user-shield"></i> Commission &amp; Provision Officer Account
+            </button>
+
+          </div><!-- end .reg-main-col -->
+        </div><!-- end .reg-split-grid -->
+      </form>
+    </div>
+  </div>
+
+  <!-- ====== JAVASCRIPT LOGIC ====== -->
+  <script>
+    let currentAdmin = null;
+    let selectedPhotoBase64 = null;
+
+    document.addEventListener("DOMContentLoaded", async () => {
+      // ── SECURITY GUARD: Strictly Admin-Only ──────────────────────────────
+      currentAdmin = await window.Auth.requireAuth(["admin"]);
+      if (!currentAdmin) return;
+    });
+
+    // ── Dynamic Class & Position Handler (Section 3 of Specs) ─────────────
+    function onOfficerClassChange() {
+      const officerClass = document.getElementById("officer_class").value;
+      const posSelect = document.getElementById("officer_position");
+
+      const allowedPositions = window.RBAC.getPositionsForClass(officerClass);
+
+      posSelect.innerHTML = '<option value="" disabled selected>-- Select Authorized Position --</option>' +
+        allowedPositions.map(pos => `<option value="${pos}">${pos}</option>`).join('');
+
+      posSelect.disabled = false;
+      onOfficerPositionChange();
+    }
+
+    function onOfficerPositionChange() {
+      const pos = document.getElementById("officer_position").value;
+      const badge = document.getElementById("badge-pos-name");
+      if (badge) badge.textContent = pos || 'Unselected';
+
+      const groupGrid = document.getElementById("unit-allocations-grid");
+      const groupCompany = document.getElementById("group-company");
+      const groupPlatoon = document.getElementById("group-platoon");
+      const compSelect = document.getElementById("company");
+      const platoonSelect = document.getElementById("platoon");
+      const lockMsg = document.getElementById("company-lock-msg");
+
+      // Reset defaults
+      if (groupGrid) groupGrid.style.display = "grid";
+      if (groupCompany) groupCompany.style.display = "block";
+      if (groupPlatoon) groupPlatoon.style.display = "block";
+      if (compSelect) compSelect.disabled = false;
+      if (lockMsg) lockMsg.style.display = "none";
+
+      // CASE 1: S-Staff Officers (S1 to S7 and Deputies) & Executive Officer
+      // Neither company nor platoon is required/applicable - hide both
+      const isStaffOfficer = /^(S1|S2|S3|S4|S7|Deputy S1|Deputy S2|Deputy S3|Deputy S4|Deputy S7|Executive Officer)/i.test(pos);
+      if (isStaffOfficer) {
+        if (groupGrid) groupGrid.style.display = "none";
+        if (groupCompany) groupCompany.style.display = "none";
+        if (groupPlatoon) groupPlatoon.style.display = "none";
+        if (compSelect) compSelect.value = "Headquarters (GHQ)";
+        if (platoonSelect) platoonSelect.value = "Headquarters";
+        return;
+      }
+
+      // CASE 2: Company Commanders
+      // Automatic assigned company, platoon is not applicable (hide platoon)
+      if (/Alpha Company Commander/i.test(pos)) {
+        if (groupPlatoon) groupPlatoon.style.display = "none";
+        if (compSelect) {
+          compSelect.value = "Alpha Company";
+          compSelect.disabled = true; // lock to Alpha
+        }
+        if (lockMsg) lockMsg.style.display = "block";
+        if (platoonSelect) platoonSelect.value = "Headquarters";
+        return;
+      }
+
+      if (/Bravo Company Commander/i.test(pos)) {
+        if (groupPlatoon) groupPlatoon.style.display = "none";
+        if (compSelect) {
+          compSelect.value = "Bravo Company";
+          compSelect.disabled = true;
+        }
+        if (lockMsg) lockMsg.style.display = "block";
+        if (platoonSelect) platoonSelect.value = "Headquarters";
+        return;
+      }
+
+      if (/Charlie Company Commander/i.test(pos)) {
+        if (groupPlatoon) groupPlatoon.style.display = "none";
+        if (compSelect) {
+          compSelect.value = "Charlie Company";
+          compSelect.disabled = true;
+        }
+        if (lockMsg) lockMsg.style.display = "block";
+        if (platoonSelect) platoonSelect.value = "Headquarters";
+        return;
+      }
+
+      // CASE 3: Platoon Leader
+      // Both company and platoon are visible and required
+      if (pos === "Platoon Leader") {
+        if (groupGrid) groupGrid.style.display = "grid";
+        if (groupCompany) groupCompany.style.display = "block";
+        if (groupPlatoon) groupPlatoon.style.display = "block";
+        if (compSelect) compSelect.disabled = false;
+        if (platoonSelect && platoonSelect.value === "Headquarters") {
+          platoonSelect.value = "1st Platoon";
+        }
+        return;
+      }
+    }
+
+    // ── Client-Side Photo Selection & Canvas Compression ─────────────────
+    function handlePhotoSelect(event) {
+      const file = event.target.files[0];
+      if (!file) return;
+
+      const statusText = document.getElementById("photo-status-text");
+      if (statusText) statusText.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Optimizing photo...';
+
+      const reader = new FileReader();
+      reader.onload = function(e) {
+        const img = new Image();
+        img.onload = function() {
+          const canvas = document.createElement("canvas");
+          const ctx = canvas.getContext("2d");
+
+          const maxDim = 400;
+          let w = img.width;
+          let h = img.height;
+          if (w > h) {
+            if (w > maxDim) { h = Math.round((h * maxDim) / w); w = maxDim; }
+          } else {
+            if (h > maxDim) { w = Math.round((w * maxDim) / h); h = maxDim; }
+          }
+
+          canvas.width = w;
+          canvas.height = h;
+          ctx.drawImage(img, 0, 0, w, h);
+
+          selectedPhotoBase64 = canvas.toDataURL("image/jpeg", 0.85);
+          const preview = document.getElementById("avatar-preview-img");
+          if (preview) preview.src = selectedPhotoBase64;
+
+          if (statusText) statusText.innerHTML = '<i class="fa-solid fa-circle-check" style="color:#16a34a;"></i> Photo encoded and ready for credentialing.';
+        };
+        img.src = e.target.result;
+      };
+      reader.readAsDataURL(file);
+    }
+
+    // ── Handle Officer Account Creation ──────────────────────────────────
+    async function handleCreateOfficer(e) {
+      e.preventDefault();
+
+      const btn = document.getElementById("btn-submit");
+      btn.disabled = true;
+      btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Provisioning Officer Credentials...';
+
+      const firstName     = document.getElementById("first_name").value.trim();
+      const middleName    = document.getElementById("middle_name").value.trim();
+      const lastName      = document.getElementById("last_name").value.trim();
+      const studentId     = document.getElementById("student_id").value.trim();
+      const course        = document.getElementById("course").value;
+      const yearLevel     = document.getElementById("year_level").value;
+      const officerClass  = document.getElementById("officer_class").value;
+      const position      = document.getElementById("officer_position").value;
+      // Read company and platoon accurately based on position logic
+      const posVal        = document.getElementById("officer_position").value;
+      let company         = document.getElementById("company").value;
+      let platoon         = document.getElementById("platoon").value;
+      if (/Alpha Company Commander/i.test(posVal))   { company = "Alpha Company"; platoon = "Headquarters"; }
+      else if (/Bravo Company Commander/i.test(posVal)) { company = "Bravo Company"; platoon = "Headquarters"; }
+      else if (/Charlie Company Commander/i.test(posVal)) { company = "Charlie Company"; platoon = "Headquarters"; }
+      else if (/^(S1|S2|S3|S4|S7|Deputy S1|Deputy S2|Deputy S3|Deputy S4|Deputy S7|Executive Officer)/i.test(posVal)) {
+        company = "Headquarters (GHQ)";
+        platoon = "Headquarters";
+      }
+      const dob           = document.getElementById("date_of_birth").value || null;
+      const phone         = document.getElementById("phone").value.trim();
+      const address       = document.getElementById("address").value.trim();
+      const emName        = document.getElementById("emergency_contact_name").value.trim();
+      const emPhone       = document.getElementById("emergency_contact_phone").value.trim();
+      const email         = document.getElementById("email").value.trim();
+      const password      = document.getElementById("password").value;
+
+      // 1. Validation check
+      if (!window.RBAC.isValidClassPosition(officerClass, position)) {
+        alert(`Validation error: Position "${position}" is not allowed for ${officerClass}.`);
+        btn.disabled = false;
+        btn.innerHTML = '<i class="fa-solid fa-user-shield"></i> Commission & Provision Officer Account';
+        return;
+      }
+
+      try {
+        // 2. Provision Supabase Auth User WITHOUT overwriting Admin Session
+        // Use isolated non-persisted client
+        const isolatedAuthClient = supabase.createClient(SUPABASE_CONFIG.url, SUPABASE_CONFIG.anonKey, {
+          auth: {
+            persistSession: false,
+            autoRefreshToken: false,
+            detectSessionInUrl: false
+          }
+        });
+
+        const { data: authData, error: authError } = await isolatedAuthClient.auth.signUp({
+          email: email,
+          password: password,
+          options: {
+            data: {
+              first_name: firstName,
+              last_name:  lastName,
+              role:       'personnel'
+            }
+          }
+        });
+
+        if (authError) throw authError;
+
+        const newUserId = authData?.user?.id || null;
+
+                // 3. Create profile via SECURITY DEFINER RPC (bypasses RLS, admin-only enforced server-side)
+        const { data: profileId, error: profError } = await window.supabaseClient
+          .rpc('admin_provision_officer_profile', {
+            p_user_id:                 newUserId,
+            p_first_name:              firstName,
+            p_middle_name:             middleName || '',
+            p_last_name:               lastName,
+            p_student_id:              studentId,
+            p_course:                  course || 'ROTC Command Staff',
+            p_year_level:              yearLevel || 'N/A',
+            p_section:                 'Officers',
+            p_role:                    'personnel',
+            p_status:                  'approved',
+            p_company:                 company || '',
+            p_platoon:                 platoon || '',
+            p_phone:                   phone,
+            p_date_of_birth:           dob || '2000-01-01',
+            p_address:                 address || 'San Enrique, Iloilo',
+            p_emergency_contact_name:  emName || '',
+            p_emergency_contact_phone: emPhone || '',
+            p_email:                   email,
+            p_profile_picture:         selectedPhotoBase64 || null
+          });
+
+        if (profError) throw profError;
+
+        // 4. Upsert into public.officer_classifications
+        const { error: offError } = await window.supabaseClient
+          .from("officer_classifications")
+          .upsert({
+            profile_id:       profileId,
+            user_id:          newUserId,
+            officer_class:    officerClass,
+            officer_position: position,
+            company:          company,
+            platoon:          platoon,
+            is_active:        true,
+            assigned_by:      currentAdmin.id,
+            updated_at:       new Date().toISOString()
+          }, { onConflict: "profile_id,officer_class" });
+
+        if (offError) throw offError;
+
+        // 5. Upsert into public.personnel table
+        await window.supabaseClient
+          .from("personnel")
+          .upsert({
+            profile_id:    profileId,
+            rank:          window.RBAC.CLASS_LABELS[officerClass] || 'Officer',
+            position:      position,
+            assigned_unit: `${company} • ${platoon}`,
+            updated_at:    new Date().toISOString()
+          }, { onConflict: "profile_id" });
+
+        // 6. Audit Log Event
+        await window.RBAC.logAudit('create_officer_account', profileId, {
+          officer_name:  `${firstName} ${lastName}`,
+          officer_class: officerClass,
+          position:      position,
+          company:       company,
+          platoon:       platoon,
+          email:         email
+        });
+
+        alert(`✅ Officer Account Created Successfully!\n\nName: ${firstName} ${lastName}\nRank: ${window.RBAC.CLASS_LABELS[officerClass]}\nPosition: ${position}\nUnit: ${company}\nEmail: ${email}`);
+
+        window.location.href = "admin-accounts.html";
+
+      } catch (err) {
+        console.error("handleCreateOfficer error:", err);
+        alert("Failed to provision officer account: " + (err.message || err));
+        btn.disabled = false;
+        btn.innerHTML = '<i class="fa-solid fa-user-shield"></i> Commission & Provision Officer Account';
+      }
+    }
+  </script>
+</body>
+</html>

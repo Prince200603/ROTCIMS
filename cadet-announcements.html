@@ -1,0 +1,593 @@
+<!DOCTYPE html>
+<!--
+  =============================================================================
+  FILE: cadet-announcements.html
+  PAGE: Cadet Command Announcements & Advisories Board
+  AUDIENCE: Enlisted Cadets & Command Staff
+  PURPOSE: Real-time board where cadets view all official ROTC announcements,
+           field drill directives, inspection schedules, and tactical advisories
+           published by Admin / Personnel from the Command Posting Center.
+  SECURITY: Auth.requireAuth(['cadet', 'personnel', 'admin'])
+  =============================================================================
+-->
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Unit Announcements &amp; Advisories — ROTCIMS</title>
+
+  <!-- Global ROTCIMS & Military Theme Stylesheets -->
+  <link rel="stylesheet" href="css/style.css">
+  <link rel="stylesheet" href="css/portal.css">
+  <link rel="stylesheet" href="css/responsive.css">
+  <link rel="stylesheet" href="css/enhancements.css">
+  <!-- Font Awesome 6 -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+
+  <!-- Supabase Client & Authentication -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="js/config.js"></script>
+  <script src="js/auth.js"></script>
+
+  <style>
+    /* ── Announcements Center Styles ── */
+    .ann-hero-banner {
+      background: linear-gradient(135deg, rgba(6, 17, 10, 0.95) 0%, rgba(20, 51, 33, 0.9) 100%), url('assets/logo.png') center/contain no-repeat;
+      border: 1px solid rgba(223, 181, 78, 0.25);
+      border-radius: var(--portal-radius-lg, 16px);
+      padding: 1.85rem 2rem;
+      margin-bottom: 1.75rem;
+      color: #ffffff;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 1.25rem;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.12);
+      position: relative;
+      overflow: hidden;
+    }
+
+    .ann-hero-banner::after {
+      content: "";
+      position: absolute;
+      right: -20px;
+      bottom: -40px;
+      width: 200px;
+      height: 200px;
+      background: radial-gradient(circle, rgba(184, 142, 44, 0.15) 0%, transparent 70%);
+      pointer-events: none;
+    }
+
+    .ann-hero-title {
+      font-family: 'Oswald', sans-serif;
+      font-size: 1.75rem;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      margin: 0 0 0.35rem 0;
+      color: #ffffff;
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+    }
+    .ann-hero-title i { color: #dfb54e; }
+
+    .ann-hero-sub {
+      color: #cbd5e1;
+      font-size: 0.88rem;
+      max-width: 600px;
+      margin: 0;
+      line-height: 1.5;
+    }
+
+    /* Filter & Search Toolbar */
+    .filter-toolbar {
+      background: #ffffff;
+      border: 1px solid var(--border, #e2e8f0);
+      border-radius: 12px;
+      padding: 0.9rem 1.25rem;
+      margin-bottom: 1.5rem;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 1rem;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.03);
+    }
+
+    .cat-pill-group {
+      display: flex;
+      gap: 0.45rem;
+      flex-wrap: wrap;
+    }
+    .cat-pill {
+      border: 1px solid #cbd5e1;
+      background: #f8fafc;
+      color: #475569;
+      padding: 0.4rem 0.85rem;
+      border-radius: 99px;
+      font-size: 0.78rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.18s ease;
+      display: inline-flex;
+      align-items: center;
+      gap: 0.4rem;
+    }
+    .cat-pill:hover { background: #e2e8f0; color: #1e293b; }
+    .cat-pill.active {
+      background: #1e3a29;
+      border-color: #1e3a29;
+      color: #ffffff;
+      box-shadow: 0 2px 6px rgba(30,58,41,0.25);
+    }
+
+    .search-input-box {
+      position: relative;
+      min-width: 240px;
+      flex: 1;
+      max-width: 340px;
+    }
+    .search-input-box input {
+      width: 100%;
+      padding: 0.5rem 0.85rem 0.5rem 2.2rem;
+      border: 1.5px solid #d1d5db;
+      border-radius: 8px;
+      font-size: 0.85rem;
+      background: #fdfefe;
+      font-family: inherit;
+    }
+    .search-input-box input:focus {
+      outline: none;
+      border-color: #1e3a29;
+      box-shadow: 0 0 0 3px rgba(30,58,41,0.1);
+    }
+    .search-input-box i {
+      position: absolute;
+      left: 0.75rem;
+      top: 50%;
+      transform: translateY(-50%);
+      color: #94a3b8;
+      font-size: 0.85rem;
+      pointer-events: none;
+    }
+
+    /* Announcements Feed Cards */
+    .ann-feed {
+      display: grid;
+      gap: 1.5rem;
+    }
+
+    .ann-card {
+      background: #ffffff;
+      border: 1px solid #e2e8f0;
+      border-radius: 14px;
+      overflow: hidden;
+      box-shadow: 0 3px 12px rgba(0,0,0,0.04);
+      transition: transform 0.2s, box-shadow 0.2s;
+    }
+    .ann-card:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 8px 24px rgba(0,0,0,0.08);
+    }
+
+    .ann-card-header {
+      padding: 1.15rem 1.4rem;
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 1rem;
+      border-bottom: 1px solid #f1f5f9;
+      background: #fafcfb;
+    }
+
+    .ann-card-meta {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+    }
+    .ann-author-avatar {
+      width: 42px;
+      height: 42px;
+      border-radius: 50%;
+      background: #1e3a29;
+      color: #dfb54e;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 700;
+      font-size: 0.95rem;
+      border: 2px solid #b88e2c;
+      flex-shrink: 0;
+    }
+    .ann-card-titles h3 {
+      font-family: 'Oswald', sans-serif;
+      font-size: 1.25rem;
+      color: #111827;
+      margin: 0 0 0.15rem 0;
+      line-height: 1.25;
+    }
+    .ann-card-timestamp {
+      font-size: 0.75rem;
+      color: #64748b;
+      display: flex;
+      align-items: center;
+      gap: 0.4rem;
+    }
+
+    .badge-category {
+      font-size: 0.7rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      padding: 0.25rem 0.65rem;
+      border-radius: 99px;
+      white-space: nowrap;
+    }
+    .badge-category.announcements { background: #dcfce7; color: #15803d; border: 1px solid #bbf7d0; }
+    .badge-category.events { background: #fef3c7; color: #b45309; border: 1px solid #fde68a; }
+    .badge-category.requirements { background: #f3e8ff; color: #7e22ce; border: 1px solid #e9d5ff; }
+
+    .ann-card-body {
+      padding: 1.25rem 1.4rem;
+      font-size: 0.92rem;
+      line-height: 1.65;
+      color: #334155;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+
+    /* Photo Grid for attached announcement images */
+    .ann-photo-preview {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+      gap: 0.5rem;
+      margin-top: 1rem;
+      border-radius: 10px;
+      overflow: hidden;
+    }
+    .ann-photo-preview img {
+      width: 100%;
+      height: 180px;
+      object-fit: cover;
+      cursor: pointer;
+      border-radius: 8px;
+      transition: transform 0.2s;
+    }
+    .ann-photo-preview img:hover {
+      transform: scale(1.02);
+    }
+
+    .ann-card-footer {
+      padding: 0.85rem 1.4rem;
+      background: #fafcfb;
+      border-top: 1px solid #f1f5f9;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      font-size: 0.8rem;
+      color: #64748b;
+    }
+
+    .empty-state {
+      text-align: center;
+      padding: 3.5rem 1.5rem;
+      background: #ffffff;
+      border: 1px dashed #cbd5e1;
+      border-radius: 14px;
+      color: #64748b;
+    }
+    .empty-state i {
+      font-size: 2.5rem;
+      color: #94a3b8;
+      margin-bottom: 0.85rem;
+    }
+    .empty-state h3 {
+      font-family: 'Oswald', sans-serif;
+      font-size: 1.35rem;
+      color: #1e293b;
+      margin-bottom: 0.35rem;
+    }
+  </style>
+</head>
+
+<body>
+  <div class="portal-layout">
+
+    <!-- ===== SIDEBAR NAVIGATION ===== -->
+    <aside class="sidebar">
+      <div class="sidebar-header">
+        <div class="brand">
+          <img src="assets/logo.png" alt="Logo" onerror="this.src='assets/icon.png'">
+          <div class="brand-text">
+            ROTCIMS
+            <span>Cadet Portal</span>
+          </div>
+        </div>
+      </div>
+
+      <nav class="sidebar-nav">
+        <div class="nav-group-title">Cadet Portal</div>
+        <ul class="sidebar-menu">
+          <li><a href="cadet-dashboard.html"><i class="fa-solid fa-table-columns"></i> Dashboard</a></li>
+          <li><a href="cadet-announcements.html" class="active"><i class="fa-solid fa-bullhorn"></i> Announcements</a></li>
+          <li><a href="cadet-modules.html"><i class="fa-solid fa-book-open"></i> Learning Modules</a></li>
+          <li><a href="cadet-dashboard.html#attendance-history"><i class="fa-solid fa-clipboard-check"></i> Attendance History</a></li>
+          <li><a href="cadet-dashboard.html#documents-section"><i class="fa-solid fa-folder-open"></i> Training Doctrine</a></li>
+          <li><a href="cadet-profile.html"><i class="fa-solid fa-gear"></i> Settings</a></li>
+        </ul>
+      </nav>
+    </aside>
+
+    <!-- ===== MAIN CONTENT ===== -->
+    <main class="main-content">
+
+      <!-- TOP BAR -->
+      <header class="top-bar">
+        <div style="display: flex; align-items: center; gap: 0.75rem;">
+          <button class="mobile-menu-btn" onclick="toggleMobileMenu()">☰</button>
+          <div class="page-title">
+            <h1><i class="fa-solid fa-bullhorn" style="color:var(--brass-light); margin-right:0.4rem;"></i> Command Announcements</h1>
+            <p>Official circulars, muster drill orders, and tactical advisories</p>
+          </div>
+        </div>
+
+        <div class="user-badge">
+          <div class="avatar" id="user-avatar">CD</div>
+          <div class="user-info">
+            <div class="name" id="user-name">Loading Cadet...</div>
+            <div class="role-tag" id="user-role">Cadet</div>
+          </div>
+        </div>
+      </header>
+
+      <!-- CONTENT BODY -->
+      <div class="content-body">
+
+        <!-- Hero Banner -->
+        <div class="ann-hero-banner">
+          <div>
+            <h2 class="ann-hero-title">
+              <i class="fa-solid fa-newspaper"></i> Official Command Feed
+            </h2>
+            <p class="ann-hero-sub">
+              Stay synchronized with ROTC Headquarters. Check for upcoming mandatory formations, uniform inspections, and academic directives.
+            </p>
+          </div>
+          <div>
+            <a href="cadet-profile.html#digital-id" class="btn btn-primary" style="background:#b88e2c; border:none; color:#fff;">
+              <i class="fa-solid fa-id-card"></i> My Digital ID &amp; QR
+            </a>
+          </div>
+        </div>
+
+        <!-- Filter & Search Bar -->
+        <div class="filter-toolbar">
+          <div class="cat-pill-group">
+            <button type="button" class="cat-pill active" onclick="filterAnnouncements('all', this)">
+              <i class="fa-solid fa-layer-group"></i> All Posts
+            </button>
+            <button type="button" class="cat-pill" onclick="filterAnnouncements('announcements', this)">
+              <i class="fa-solid fa-bullhorn"></i> Announcements
+            </button>
+            <button type="button" class="cat-pill" onclick="filterAnnouncements('events', this)">
+              <i class="fa-solid fa-calendar-check"></i> Events &amp; Drills
+            </button>
+            <button type="button" class="cat-pill" onclick="filterAnnouncements('requirements', this)">
+              <i class="fa-solid fa-list-check"></i> Requirements
+            </button>
+          </div>
+
+          <div class="search-input-box">
+            <i class="fa-solid fa-magnifying-glass"></i>
+            <input type="text" id="ann-search" placeholder="Search announcements..." oninput="searchAnnouncements(this.value)">
+          </div>
+        </div>
+
+        <!-- Announcements Feed -->
+        <div class="ann-feed" id="announcements-container">
+          <div style="text-align: center; padding: 3rem; color: #64748b;">
+            <i class="fa-solid fa-spinner fa-spin" style="font-size: 1.8rem; color: #b88e2c; margin-bottom: 0.75rem; display: block;"></i>
+            Loading command announcements...
+          </div>
+        </div>
+
+      </div><!-- /content-body -->
+    </main>
+  </div>
+
+  <!-- SCRIPT -->
+  <script>
+    let currentCadet = null;
+    let allPosts = [];
+    let currentCategory = 'all';
+    let searchQuery = '';
+
+    document.addEventListener("DOMContentLoaded", async () => {
+      currentCadet = await Auth.requireAuth(["cadet", "personnel", "admin"]);
+      if (!currentCadet) return;
+
+      // Populate user badge
+      const fullName = `${currentCadet.first_name || ''} ${currentCadet.last_name || ''}`.trim() || 'Cadet';
+      const initials = [(currentCadet.first_name || '').charAt(0), (currentCadet.last_name || '').charAt(0)].join('').toUpperCase() || 'CD';
+      document.getElementById('user-name').textContent = fullName;
+      document.getElementById('user-avatar').textContent = initials;
+
+      // Load Announcements
+      await loadCadetAnnouncements();
+    });
+
+    async function loadCadetAnnouncements() {
+      const container = document.getElementById('announcements-container');
+      try {
+        let fetched = [];
+
+        if (window.supabaseClient) {
+          // 1. Fetch from posts table (created via Command Posting Center)
+          const { data: postsData, error: postsErr } = await window.supabaseClient
+            .from('posts')
+            .select('*')
+            .eq('is_published', true)
+            .order('created_at', { ascending: false });
+
+          if (!postsErr && Array.isArray(postsData)) {
+            fetched = fetched.concat(postsData);
+          }
+
+          // 2. Fetch from announcements table
+          const { data: annData, error: annErr } = await window.supabaseClient
+            .from('announcements')
+            .select('*')
+            .order('created_at', { ascending: false });
+
+          if (!annErr && Array.isArray(annData)) {
+            annData.forEach(item => {
+              if (!fetched.some(p => p.title === item.title)) {
+                fetched.push({
+                  id: item.id,
+                  title: item.title,
+                  caption: item.content || item.description || '',
+                  category: (item.category || 'announcements').toLowerCase(),
+                  created_at: item.created_at,
+                  author: 'Command Staff'
+                });
+              }
+            });
+          }
+        }
+
+        // Check local storage posts fallback
+        try {
+          const local = JSON.parse(localStorage.getItem('rotc_local_posts') || '[]');
+          if (Array.isArray(local)) {
+            local.forEach(lp => {
+              if (lp.is_published !== false && !fetched.some(f => f.id === lp.id || f.title === lp.title)) {
+                fetched.push(lp);
+              }
+            });
+          }
+        } catch(e) {}
+
+        // Sort by date newest first
+        fetched.sort((a, b) => new Date(b.created_at || 0) - new Date(a.created_at || 0));
+        allPosts = fetched;
+
+        renderFilteredPosts();
+
+      } catch (err) {
+        console.error('Error loading announcements:', err);
+        container.innerHTML = `
+          <div class="empty-state">
+            <i class="fa-solid fa-triangle-exclamation" style="color:#ef4444;"></i>
+            <h3>Notice</h3>
+            <p>Unable to load announcements at this time. Please check your network connection.</p>
+          </div>
+        `;
+      }
+    }
+
+    function renderFilteredPosts() {
+      const container = document.getElementById('announcements-container');
+      let filtered = allPosts;
+
+      if (currentCategory !== 'all') {
+        filtered = filtered.filter(p => (p.category || 'announcements').toLowerCase().includes(currentCategory));
+      }
+
+      if (searchQuery.trim()) {
+        const q = searchQuery.toLowerCase();
+        filtered = filtered.filter(p =>
+          (p.title || '').toLowerCase().includes(q) ||
+          (p.caption || p.content || '').toLowerCase().includes(q)
+        );
+      }
+
+      if (filtered.length === 0) {
+        container.innerHTML = `
+          <div class="empty-state">
+            <i class="fa-solid fa-bullhorn"></i>
+            <h3>No Announcements Found</h3>
+            <p>There are no announcements matching your selected category.</p>
+          </div>
+        `;
+        return;
+      }
+
+      container.innerHTML = filtered.map(post => {
+        const title = post.title || 'Official Unit Advisory';
+        const caption = post.caption || post.content || '';
+        const cat = (post.category || 'announcements').toLowerCase();
+        const dateStr = post.created_at
+          ? new Date(post.created_at).toLocaleDateString('en-PH', { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
+          : 'Official Notice';
+
+        let imagesHtml = '';
+        if (Array.isArray(post.images) && post.images.length > 0) {
+          imagesHtml = `
+            <div class="ann-photo-preview">
+              ${post.images.slice(0, 4).map(src => `<img src="${src}" alt="Attached Photo" onclick="window.open('${src}', '_blank')">`).join('')}
+            </div>
+          `;
+        }
+
+        return `
+          <article class="ann-card">
+            <div class="ann-card-header">
+              <div class="ann-card-meta">
+                <div class="ann-author-avatar">HQ</div>
+                <div class="ann-card-titles">
+                  <h3>${escapeHtml(title)}</h3>
+                  <div class="ann-card-timestamp">
+                    <i class="fa-regular fa-clock"></i> ${dateStr}
+                    <span>•</span>
+                    <i class="fa-solid fa-shield-halved"></i> San Enrique ROTC Command
+                  </div>
+                </div>
+              </div>
+              <span class="badge-category ${cat}">${cat}</span>
+            </div>
+
+            <div class="ann-card-body">
+              ${escapeHtml(caption)}
+              ${imagesHtml}
+            </div>
+
+            <div class="ann-card-footer">
+              <div>
+                <i class="fa-solid fa-check-double" style="color:#15803d; margin-right:4px;"></i>
+                <span>Official Enlisted Distribution</span>
+              </div>
+              <div>
+                <span>Republic of the Philippines • DMST</span>
+              </div>
+            </div>
+          </article>
+        `;
+      }).join('');
+    }
+
+    function filterAnnouncements(cat, btn) {
+      currentCategory = cat;
+      document.querySelectorAll('.cat-pill').forEach(p => p.classList.remove('active'));
+      btn.classList.add('active');
+      renderFilteredPosts();
+    }
+
+    function searchAnnouncements(val) {
+      searchQuery = val;
+      renderFilteredPosts();
+    }
+
+    function escapeHtml(str) {
+      if (!str) return '';
+      return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+    }
+  </script>
+</body>
+</html>
+

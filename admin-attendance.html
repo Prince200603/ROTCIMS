@@ -1,0 +1,2271 @@
+﻿<!--
+  ============================================================
+  FILE: admin-attendance.html
+  PURPOSE: Advanced Ultra-Clean Minimalist Glass & Modern Command
+           Formation Drill Attendance Management Portal.
+  FEATURES:
+    • Ultra-Clean Minimalist Glass UI with Clean Light / Dark Mode Toggle
+    • Interactive Live Quick-Filter KPI Cards (instant filter on Present, Late, Absent, Excused)
+    • Sticky Responsive Table Header conforming to Modern Web Guidelines
+    • Real-Time Debounced Search with shortcut key (/) and Clear (✕)
+    • Inline 1-Click Status Toggler for rapid on-field adjustments
+    • Density Switcher (Comfortable vs Compact)
+    • Shimmering Skeleton Loaders preventing layout shifts
+    • Built-in CSV Export & High-Fidelity Print Roster
+    • Tactile Toast Feedback Notifications
+
+  ACCESS: Restricted to 'admin', 'personnel', or 'platoon_leader'.
+  ============================================================
+-->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Formation Drill Attendance — ROTCIMS Command</title>
+  
+  <!-- Core & Design System Stylesheets -->
+  <link rel="stylesheet" href="css/style.css">
+  <link rel="stylesheet" href="css/portal.css">
+  <link rel="stylesheet" href="css/responsive.css">
+  
+  <!-- Font Awesome 6 Pro Icons -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+  
+  <!-- Theme Persistence Initialization (Immediate to prevent flash) -->
+  <script src="js/theme.js"></script>
+  
+  <!-- Supabase client library & Auth Guard -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script>
+  <script src="js/config.js"></script>
+  <script src="js/auth.js"></script>
+  <script src="js/rbac.js"></script>
+  <style>
+    /* ── Export Dropdown Styles ── */
+    .export-drop-item {
+      width: 100%;
+      background: transparent;
+      border: none;
+      padding: 0.6rem 1rem;
+      text-align: left;
+      color: var(--portal-ink);
+      font-size: 0.83rem;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 0.6rem;
+      transition: background 0.15s;
+    }
+    .export-drop-item:hover {
+      background: var(--portal-border-subtle);
+    }
+  </style>
+  <script src="js/user-menu.js"></script>
+</head>
+<body>
+
+  <!-- ====== PORTAL LAYOUT WRAPPER ====== -->
+  <div class="portal-layout">
+
+    <!-- ====== COMMAND SIDEBAR NAVIGATION ====== -->
+            <aside class="sidebar">
+      <div class="sidebar-header">
+        <div class="brand">
+          <img src="assets/logo.png" alt="Logo" onerror="this.src='assets/icon.png'">
+          <div class="brand-text">ROTCIMS <span>Command Staff</span></div>
+        </div>
+      </div>
+      <nav class="sidebar-nav">
+        <div class="nav-group-title">Overview</div>
+        <ul class="sidebar-menu">
+          <li><a href="admin-dashboard.html"><i class="fa-solid fa-chart-pie"></i> Dashboard</a></li>
+        </ul>
+        <div class="nav-group-title">Drill &amp; Attendance</div>
+        <ul class="sidebar-menu">
+          <li><a href="admin-attendance.html" class="active"><i class="fa-solid fa-clipboard-check"></i> Attendance</a></li>
+          <li><a href="admin-reports.html"><i class="fa-solid fa-file-invoice"></i> Attendance Reports</a></li>
+        </ul>
+        <div class="nav-group-title">Cadets &amp; Admissions</div>
+        <ul class="sidebar-menu">
+          <li><a href="admin-cadets.html"><i class="fa-solid fa-users-viewfinder"></i> Cadet Directory</a></li>
+        </ul>
+        <div class="nav-group-title">Content &amp; Academics</div>
+        <ul class="sidebar-menu">
+          <li><a href="admin-posting.html"><i class="fa-solid fa-pen-to-square"></i> Posting Center</a></li>
+          <li><a href="admin-documents.html"><i class="fa-solid fa-book-bookmark"></i> Modules &amp; Documents</a></li>
+        </ul>
+        <div class="nav-group-title">Personnel &amp; Governance</div>
+        <ul class="sidebar-menu">
+          <li><a href="admin-accounts.html"><i class="fa-solid fa-users-gear"></i> Personnel &amp; Roles</a></li>
+          <li><a href="admin-settings.html"><i class="fa-solid fa-sliders"></i> Settings &amp; Storage</a></li>
+        </ul>
+      </nav>
+    </aside>
+
+    <!-- ====== MAIN COMMAND CONTENT ====== -->
+    <main class="main-content">
+
+      <!-- ====== COMMAND TOP BAR (FROSTED GLASS) ====== -->
+      <header class="top-bar">
+        <div style="display: flex; align-items: center; gap: 0.85rem;">
+          <button class="mobile-menu-btn" onclick="toggleMobileMenu()" aria-label="Toggle Navigation Menu">☰</button>
+          <div class="page-title">
+            <h1>Formation Drill Attendance Management</h1>
+            <p id="topbar-session-subtitle">Real-time attendance roster, automated tracking, and rapid field adjustments.</p>
+          </div>
+        </div>
+
+        <div style="display: flex; align-items: center; gap: 0.85rem;">
+          <!-- Light / Dark Glass Theme Switcher -->
+          <button type="button" class="theme-toggle-btn" onclick="togglePortalTheme()" title="Switch Color Theme">
+            <i class="fa-solid fa-moon"></i>
+            <span class="theme-label d-none-mobile">Dark Mode</span>
+          </button>
+
+          <!-- Logged-in user info badge -->
+          <div class="user-badge">
+            <div class="avatar" id="user-avatar">AT</div>
+            <div class="user-info d-none-mobile">
+              <div class="name" id="user-name">Loading...</div>
+              <div class="role-tag" id="user-role">Officer</div>
+            </div>
+          </div>
+        </div>
+      </header>
+
+      <!-- ====== CONTENT BODY ====== -->
+      <div class="content-body">
+
+        <!-- ====== 1. INTERACTIVE LIVE QUICK-FILTER KPI CARDS ====== -->
+        <section aria-label="Attendance Statistics and Quick Filters">
+          <div class="kpi-deck">
+            <!-- TOTAL CADETS -->
+            <div class="kpi-card kpi-total active-filter" id="kpi-card-total" onclick="setAttFilter('all')" title="Click to view all attendance records">
+              <div class="kpi-card-header">
+                <span class="kpi-label">Formation Roster</span>
+                <div class="kpi-icon-wrap"><i class="fa-solid fa-users"></i></div>
+              </div>
+              <div class="kpi-value" id="mob-stat-total">0</div>
+              <div class="kpi-subtext"><i class="fa-solid fa-layer-group"></i> Total Enrolled / Active</div>
+            </div>
+
+            <!-- PRESENT -->
+            <div class="kpi-card kpi-present" id="kpi-card-present" onclick="setAttFilter('PRESENT')" title="Click to filter by Present cadets">
+              <div class="kpi-card-header">
+                <span class="kpi-label">Present</span>
+                <div class="kpi-icon-wrap"><i class="fa-solid fa-check-double"></i></div>
+              </div>
+              <div class="kpi-value" id="mob-stat-present">0</div>
+              <div class="kpi-subtext" id="kpi-present-pct"><i class="fa-solid fa-chart-line"></i> 0% of formation</div>
+            </div>
+
+            <!-- LATE -->
+            <div class="kpi-card kpi-late" id="kpi-card-late" onclick="setAttFilter('LATE')" title="Click to filter by Late arrivals">
+              <div class="kpi-card-header">
+                <span class="kpi-label">Late</span>
+                <div class="kpi-icon-wrap"><i class="fa-solid fa-clock-rotate-left"></i></div>
+              </div>
+              <div class="kpi-value" id="mob-stat-late">0</div>
+              <div class="kpi-subtext"><i class="fa-solid fa-stopwatch"></i> Arrived past formation</div>
+            </div>
+
+            <!-- ABSENT -->
+            <div class="kpi-card kpi-absent" id="kpi-card-absent" onclick="setAttFilter('ABSENT')" title="Click to filter by Absent cadets">
+              <div class="kpi-card-header">
+                <span class="kpi-label">Absent</span>
+                <div class="kpi-icon-wrap"><i class="fa-solid fa-xmark"></i></div>
+              </div>
+              <div class="kpi-value" id="mob-stat-absent">0</div>
+              <div class="kpi-subtext"><i class="fa-solid fa-user-xmark"></i> Unexcused missing</div>
+            </div>
+
+            <!-- EXCUSED -->
+            <div class="kpi-card kpi-excused" id="kpi-card-excused" onclick="setAttFilter('EXCUSED')" title="Click to filter by Excused cadets">
+              <div class="kpi-card-header">
+                <span class="kpi-label">Excused</span>
+                <div class="kpi-icon-wrap"><i class="fa-solid fa-shield-halved"></i></div>
+              </div>
+              <div class="kpi-value" id="mob-stat-excused">0</div>
+              <div class="kpi-subtext"><i class="fa-solid fa-file-medical"></i> Authorized pass/medical</div>
+            </div>
+          </div>
+        </section>
+
+        <!-- ====== 2. ADVANCED COMMAND ACTION & FILTER TOOLBAR ====== -->
+        <div class="card" style="padding: 1.25rem 1.4rem; margin-bottom: 1.25rem;">
+          <div class="command-toolbar">
+            
+            <!-- Primary Action Buttons Group -->
+            <div style="display: flex; gap: 0.5rem; flex-wrap: wrap; align-items: center;">
+              <button onclick="openNewSessionModal()" class="btn btn-primary" title="Create a new drill session">
+                <i class="fa-solid fa-calendar-plus"></i> New Formation
+              </button>
+              <button onclick="openManualAttendanceModal()" class="btn btn-brass" title="Manually record cadet attendance">
+                <i class="fa-solid fa-clipboard-check"></i> Manual Entry
+              </button>
+              <button type="button" onclick="openLiveQrScannerModal()" class="btn btn-scanner-cta" id="btn-open-scanner" title="Launch Tactical QR Scanner">
+                <i class="fa-solid fa-qrcode"></i> Launch QR Scanner
+              </button>
+              <!-- Export Dropdown Group -->
+              <div style="position:relative;display:inline-block;" id="export-dropdown-wrapper">
+                <button onclick="toggleExportDropdown()" class="btn btn-outline"
+                  style="border-color:rgba(34,197,94,0.5);display:flex;align-items:center;gap:0.4rem;padding-right:0.7rem;"
+                  title="Export & Archive Options" id="export-dropdown-btn">
+                  <i class="fa-solid fa-file-arrow-down" style="color:#22c55e;"></i>
+                  Export &amp; Archive
+                  <i class="fa-solid fa-chevron-down" style="font-size:0.7rem;color:rgba(255,255,255,0.5);" id="export-caret"></i>
+                </button>
+                <div id="export-dropdown-menu" style="
+                  display:none; position:absolute; top:calc(100% + 6px); right:0; z-index:500;
+                  background:var(--portal-card-bg); border:1px solid var(--portal-border);
+                  border-radius:10px; min-width:220px; box-shadow:0 8px 28px rgba(0,0,0,0.35);
+                  overflow:hidden;">
+                  <div style="padding:0.5rem 0.8rem;font-size:0.68rem;color:var(--portal-muted);text-transform:uppercase;letter-spacing:0.1em;border-bottom:1px solid var(--portal-border);">
+                    Export &amp; Archive Options
+                  </div>
+                  <button onclick="doExportAndArchive('xlsx')" class="export-drop-item">
+                    <i class="fa-solid fa-file-excel" style="color:#22c55e;width:18px;"></i>
+                    Save to Reports as Excel
+                  </button>
+                  <button onclick="doExportAndArchive('csv')" class="export-drop-item">
+                    <i class="fa-solid fa-file-csv" style="color:#38bdf8;width:18px;"></i>
+                    Save to Reports as CSV
+                  </button>
+                  <button onclick="doExportAndArchive('pdf')" class="export-drop-item">
+                    <i class="fa-solid fa-file-pdf" style="color:#ef4444;width:18px;"></i>
+                    Save to Reports as PDF
+                  </button>
+                  <div style="height:1px;background:var(--portal-border);margin:0.25rem 0;"></div>
+                  <button onclick="goToReportsPage()" class="export-drop-item">
+                    <i class="fa-solid fa-folder-open" style="color:#b88e2c;width:18px;"></i>
+                    View All Saved Reports
+                  </button>
+                </div>
+              </div>
+              <button onclick="printOfficialAttendanceLedger()" class="btn btn-outline d-none-mobile" title="Print official AFP attendance ledger">
+                <i class="fa-solid fa-print"></i> Print
+              </button>
+            </div>
+
+            <!-- Multi-Filter & Search Controls -->
+            <div style="display: flex; gap: 0.65rem; align-items: center; flex-wrap: wrap;">
+              
+              <!-- Session Dropdown -->
+              <div style="display: flex; align-items: center; gap: 0.35rem;">
+                <select id="filter-session" class="form-select" style="min-width: 220px;" onchange="onFilterSessionChanged()" title="Select Formation Drill Session">
+                  <option value="all">All Formation Sessions</option>
+                </select>
+                <span id="att-session-status-badge" class="session-status-pill pill-open" style="display: none;">
+                  <span class="status-pulse-dot" id="att-status-dot"></span>
+                  <span id="att-session-status-text">OPEN</span>
+                </span>
+              </div>
+
+              <!-- Session Action Group (Close, Edit, Delete) -->
+              <div id="session-action-group" style="display: none; gap: 0.3rem;">
+                <button type="button" id="btn-att-toggle-open" onclick="toggleCurrentSessionOpen()" class="btn btn-sm btn-outline" title="Toggle Open/Closed status">
+                  <i class="fa-solid fa-lock"></i> Close
+                </button>
+                <button type="button" onclick="openEditCurrentSessionModal()" class="btn btn-sm btn-outline" title="Edit selected session details">
+                  <i class="fa-solid fa-pen"></i> Edit
+                </button>
+                <button type="button" onclick="deleteCurrentSession()" class="btn btn-sm btn-danger" title="Permanently delete session">
+                  <i class="fa-solid fa-trash"></i>
+                </button>
+              </div>
+
+              <!-- Platoon Filter -->
+              <select id="filter-platoon" class="form-select" onchange="onPlatoonFilterChanged(this.value)" style="width: 140px;">
+                <option value="all">All Platoons</option>
+                <option value="1st Platoon">1st Platoon</option>
+                <option value="2nd Platoon">2nd Platoon</option>
+                <option value="3rd Platoon">3rd Platoon</option>
+              </select>
+
+              <!-- Status Dropdown (Kept in sync with KPI cards) -->
+              <select id="filter-status" class="form-select" onchange="onStatusFilterChanged(this.value)" style="width: 135px;">
+                <option value="all">All Statuses</option>
+                <option value="PRESENT">Present</option>
+                <option value="LATE">Late</option>
+                <option value="EXCUSED">Excused</option>
+                <option value="ABSENT">Absent</option>
+              </select>
+
+            </div>
+          </div>
+
+          <!-- Secondary Toolbar Row: Live Search & Table Density Toggle -->
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 1rem; padding-top: 0.85rem; border-top: 1px solid var(--portal-border-subtle); flex-wrap: wrap; gap: 0.75rem;">
+            <!-- Live Search Bar -->
+            <div class="search-input-wrap">
+              <i class="fa-solid fa-magnifying-glass search-icon"></i>
+              <input type="text" id="att-search" placeholder="Quick search cadet, ID, course, or platoon... (Press / to focus)" oninput="filterAndRenderRecords()">
+              <button type="button" id="search-clear-btn" class="clear-btn" onclick="clearSearch()" title="Clear search">✕</button>
+            </div>
+
+            <!-- View Controls & Density Switcher -->
+            <div style="display: flex; align-items: center; gap: 0.85rem;">
+              <span style="font-size: 0.78rem; color: var(--portal-muted); font-weight: 600;">Table Density:</span>
+              <div class="density-btn-group" role="group" aria-label="Table density switcher">
+                <button type="button" id="density-comfortable-btn" class="density-btn active" onclick="setTableDensity('comfortable')" title="Comfortable spacious spacing">
+                  <i class="fa-solid fa-bars"></i> Comfortable
+                </button>
+                <button type="button" id="density-compact-btn" class="density-btn" onclick="setTableDensity('compact')" title="Compact data-dense rows">
+                  <i class="fa-solid fa-table-cells"></i> Compact
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- ====== 3. ATTENDANCE RECORDS ROSTER (STICKY RESPONSIVE TABLE) ====== -->
+        <div class="card" style="border: 1px solid var(--portal-border); box-shadow: var(--portal-shadow-sm); overflow: hidden;">
+          <div class="card-header">
+            <h3>
+              <i class="fa-solid fa-clipboard-user" style="color: var(--portal-brass);"></i>
+              Attendance Log Roster
+            </h3>
+            <div style="display: flex; align-items: center; gap: 0.5rem;">
+              <span id="active-filter-indicator" class="badge" style="display: none; background: var(--portal-border-subtle); color: var(--portal-ink);">Filter: ALL</span>
+              <span id="record-count" class="badge badge-admin">0 Records</span>
+            </div>
+          </div>
+
+          <!-- DESKTOP STICKY DATA TABLE (Conforming to Modern Web Guidelines) -->
+          <div tabindex="0" role="region" aria-label="Attendance Records Roster" class="table-wrapper" id="attendance-table-wrapper">
+            <table class="data-table" id="attendance-data-table">
+              <thead>
+                <tr>
+                  <th scope="col" style="min-width: 220px;">Cadet Profile</th>
+                  <th scope="col" style="min-width: 130px;">Student ID</th>
+                  <th scope="col" style="min-width: 140px;">Course &amp; Section</th>
+                  <th scope="col" style="min-width: 130px;">Platoon</th>
+                  <th scope="col" style="min-width: 180px;">Formation Session</th>
+                  <th scope="col" style="min-width: 110px;">Time-In</th>
+                  <th scope="col" style="min-width: 90px;">Method</th>
+                  <th scope="col" style="min-width: 140px;">Status (1-Click Change)</th>
+                  <th scope="col" style="text-align: right; min-width: 80px;">Actions</th>
+                </tr>
+              </thead>
+              <tbody id="attendance-tbody">
+                <!-- Shimmering Skeleton Rows injected while fetching -->
+              </tbody>
+            </table>
+          </div>
+
+          <!-- MOBILE HANDHELD CARDS VIEW -->
+          <div class="mobile-cards-view" id="attendance-mobile-cards" style="padding: 1rem;">
+            <!-- Mobile cards rendered dynamically -->
+          </div>
+        </div>
+
+      </div><!-- end .content-body -->
+    </main>
+  </div><!-- end .portal-layout -->
+
+  <!-- ====== MODAL: CREATE / EDIT SESSION ====== -->
+  <div id="modal-session" class="modal-overlay" onclick="handleModalBackdropClick(event, 'modal-session')">
+    <div class="modal-content" role="dialog" aria-modal="true" aria-labelledby="modal-att-session-title">
+      <div class="modal-header">
+        <h3 id="modal-att-session-title">Create Formation Drill Session</h3>
+        <button class="modal-close" onclick="closeModals()" aria-label="Close dialog">✕</button>
+      </div>
+      <form id="form-session" onsubmit="handleSaveSession(event)">
+        <input type="hidden" id="sess-edit-id">
+        <div class="modal-body">
+          <div class="form-group" style="margin-bottom: 1rem;">
+            <label class="form-label" for="sess-title">Session Title *</label>
+            <input type="text" id="sess-title" required class="form-input" style="width: 100%;" placeholder="e.g. Regular Saturday Drill Day 3">
+          </div>
+
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-bottom: 1rem;">
+            <div class="form-group">
+              <label class="form-label" for="sess-date">Session Date *</label>
+              <input type="date" id="sess-date" required class="form-input" style="width: 100%;">
+            </div>
+            <div class="form-group">
+              <label class="form-label" for="sess-location">Location</label>
+              <input type="text" id="sess-location" class="form-input" style="width: 100%;" placeholder="Grandstand Parade Grounds">
+            </div>
+          </div>
+
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-bottom: 1rem;">
+            <div class="form-group">
+              <label class="form-label" for="sess-start">Start Time</label>
+              <input type="time" id="sess-start" value="07:00" class="form-input" style="width: 100%;">
+            </div>
+            <div class="form-group">
+              <label class="form-label" for="sess-end">End Time</label>
+              <input type="time" id="sess-end" value="12:00" class="form-input" style="width: 100%;">
+            </div>
+          </div>
+
+          <div class="form-group" style="margin-top: 0.75rem;">
+            <label style="display: flex; align-items: center; gap: 0.65rem; font-size: 0.85rem; font-weight: 600; cursor: pointer; color: var(--portal-ink);">
+              <input type="checkbox" id="sess-is-open" checked style="width: 18px; height: 18px; accent-color: var(--portal-primary);">
+              <span>Session is OPEN for active QR attendance scanning</span>
+            </label>
+          </div>
+
+          
+          <!-- TARGET UNIT ASSIGNMENT (Platoon-based sessions) -->
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-top: 1rem;">
+            <div class="form-group">
+              <label class="form-label" for="sess-target-company">Target Company</label>
+              <select id="sess-target-company" class="form-select" style="width: 100%;">
+                <option value="all">All Companies</option>
+                <option value="Alpha Company">Alpha Company</option>
+                <option value="Bravo Company">Bravo Company</option>
+                <option value="Charlie Company">Charlie Company</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label class="form-label" for="sess-target-platoon">Target Platoon</label>
+              <select id="sess-target-platoon" class="form-select" style="width: 100%;">
+                <option value="all">All Platoons</option>
+                <option value="1st Platoon">1st Platoon</option>
+                <option value="2nd Platoon">2nd Platoon</option>
+                <option value="3rd Platoon">3rd Platoon</option>
+                <option value="Headquarters">Headquarters</option>
+              </select>
+            </div>
+          </div>
+
+          <!-- QR SCANNER ACCESS CONTROL -->
+          <div class="form-group" style="margin-top: 1.1rem; background: rgba(30,58,41,0.04); border: 1.5px solid var(--portal-border); border-radius: 10px; padding: 1rem 1.15rem;">
+            <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.75rem;">
+              <i class="fa-solid fa-shield-halved" style="color: #b88e2c; font-size: 0.9rem;"></i>
+              <span style="font-size: 0.84rem; font-weight: 700; color: var(--portal-ink);">Who Can Scan?</span>
+              <span style="font-size: 0.75rem; color: var(--portal-muted); font-weight: 400;">Access control for this session</span>
+            </div>
+            <div style="display: flex; flex-direction: column; gap: 0.45rem;" id="scanner-type-options">
+
+              <label class="scanner-access-option" id="scanner-opt-all" style="display: flex; align-items: flex-start; gap: 0.65rem; cursor: pointer; padding: 0.65rem 0.75rem; border-radius: 8px; border: 1.5px solid #b88e2c; background: rgba(184,142,44,0.07); transition: all 0.15s;">
+                <input type="radio" name="sess-scanner-type" id="sess-scanner-type-all" value="all" checked style="accent-color: #1e3a29; margin-top: 3px; flex-shrink: 0;" onchange="highlightScannerOption()">
+                <div>
+                  <div style="font-weight: 700; font-size: 0.85rem;">🌐 All — Officers &amp; Cadets</div>
+                  <div style="font-size: 0.75rem; color: var(--portal-muted); margin-top: 0.1rem;">Both officers and regular cadets can scan. <strong>(Default)</strong></div>
+                </div>
+              </label>
+
+              <label class="scanner-access-option" id="scanner-opt-officers" style="display: flex; align-items: flex-start; gap: 0.65rem; cursor: pointer; padding: 0.65rem 0.75rem; border-radius: 8px; border: 1.5px solid transparent; transition: all 0.15s;">
+                <input type="radio" name="sess-scanner-type" id="sess-scanner-type-officers" value="officers_only" style="accent-color: #b88e2c; margin-top: 3px; flex-shrink: 0;" onchange="highlightScannerOption()">
+                <div>
+                  <div style="font-weight: 700; font-size: 0.85rem;">🎖️ Officers Only</div>
+                  <div style="font-size: 0.75rem; color: var(--portal-muted); margin-top: 0.1rem;">Advance, 1st–4th Class Officers only. Regular cadets denied.</div>
+                </div>
+              </label>
+
+              <label class="scanner-access-option" id="scanner-opt-cadets" style="display: flex; align-items: flex-start; gap: 0.65rem; cursor: pointer; padding: 0.65rem 0.75rem; border-radius: 8px; border: 1.5px solid transparent; transition: all 0.15s;">
+                <input type="radio" name="sess-scanner-type" id="sess-scanner-type-cadets" value="cadets_only" style="accent-color: #22c55e; margin-top: 3px; flex-shrink: 0;" onchange="highlightScannerOption()">
+                <div>
+                  <div style="font-weight: 700; font-size: 0.85rem;">👤 Cadets Only</div>
+                  <div style="font-size: 0.75rem; color: var(--portal-muted); margin-top: 0.1rem;">Regular enlisted cadets only. Officers excluded.</div>
+                </div>
+              </label>
+
+            </div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-outline" onclick="closeModals()">Cancel</button>
+          <button type="submit" id="btn-att-save-session" class="btn btn-primary">Save Session</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- ====== MODAL: MANUAL ATTENDANCE ENTRY ====== -->
+  <div id="modal-manual" class="modal-overlay" onclick="handleModalBackdropClick(event, 'modal-manual')">
+    <div class="modal-content" role="dialog" aria-modal="true" aria-labelledby="modal-manual-title">
+      <div class="modal-header">
+        <h3 id="modal-manual-title">Manual Attendance Entry</h3>
+        <button class="modal-close" onclick="closeModals()" aria-label="Close dialog">✕</button>
+      </div>
+      <form id="form-manual" onsubmit="handleManualEntry(event)">
+        <div class="modal-body">
+          <div class="form-group" style="margin-bottom: 1rem;">
+            <label class="form-label" for="man-session">Select Formation Session *</label>
+            <select id="man-session" required class="form-select" style="width: 100%;"></select>
+          </div>
+
+          <div class="form-group" style="margin-bottom: 1rem;">
+            <label class="form-label" for="man-cadet">Select Enrolled Cadet *</label>
+            <select id="man-cadet" required class="form-select" style="width: 100%;">
+              <option value="">Loading enrolled cadets...</option>
+            </select>
+          </div>
+
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
+            <div class="form-group">
+              <label class="form-label" for="man-status">Attendance Status *</label>
+              <select id="man-status" required class="form-select" style="width: 100%;">
+                <option value="PRESENT">PRESENT</option>
+                <option value="LATE">LATE</option>
+                <option value="EXCUSED">EXCUSED</option>
+                <option value="ABSENT">ABSENT</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label class="form-label" for="man-time">Time In</label>
+              <input type="time" id="man-time" class="form-input" style="width: 100%;">
+            </div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-outline" onclick="closeModals()">Cancel</button>
+          <button type="submit" class="btn btn-primary">Save Record</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  
+  <!-- ====== HIGH-TECH TACTICAL LIVE QR SCANNER MODAL ====== -->
+  <div id="modal-qr-scanner" class="modal-overlay" style="z-index: 1050;" onclick="handleModalBackdropClick(event, 'modal-qr-scanner')">
+    <div class="modal-content modal-scanner-dialog" role="dialog" aria-modal="true" aria-labelledby="scanner-modal-title">
+      
+      <!-- SCANNER MODAL HEADER -->
+      <div class="scanner-modal-header">
+        <div style="display: flex; align-items: center; gap: 0.75rem;">
+          <div style="width: 10px; height: 10px; border-radius: 50%; background: #22c55e; box-shadow: 0 0 12px #22c55e; animation: pulse 1.8s infinite;"></div>
+          <h3 id="scanner-modal-title" class="scanner-modal-title">
+            <i class="fa-solid fa-qrcode" style="color: #fbbf24;"></i>
+            <span>Live Formation QR Scanner</span>
+          </h3>
+          <span id="scanner-permission-badge" style="font-size:0.72rem; font-weight:700; padding:0.2rem 0.6rem; border-radius:999px; background:rgba(34,197,94,0.2); color:#4ade80; border:1px solid rgba(74,222,128,0.3); display:none;"></span>
+        </div>
+
+        <!-- Session switcher, Flip camera, Audio toggle & Close -->
+        <div style="display: flex; align-items: center; gap: 0.55rem; flex-wrap: wrap;">
+          <div class="scanner-session-pill">
+            <i class="fa-solid fa-calendar-check" style="font-size: 0.82rem; color: #fbbf24;"></i>
+            <select id="modal-scanner-session" onchange="onModalScannerSessionChange()" title="Active Session for Scanning">
+              <!-- Dynamically populated -->
+            </select>
+          </div>
+
+          <!-- Flip Camera -->
+          <button type="button" class="scanner-btn-tool" onclick="flipModalCamera()" title="Switch Front/Back Camera">
+            <i class="fa-solid fa-camera-rotate"></i> <span>Flip</span>
+          </button>
+
+          <!-- Audio Beep Toggle -->
+          <button type="button" class="scanner-btn-tool" id="btn-scanner-sound" onclick="toggleScannerSound()" title="Toggle Scan Beep Sound">
+            <i class="fa-solid fa-volume-high"></i>
+          </button>
+
+          <!-- Close Modal -->
+          <button type="button" class="scanner-btn-close" onclick="closeLiveQrScannerModal()" aria-label="Close Scanner">✕</button>
+        </div>
+      </div>
+
+      <!-- SCANNER MODAL GRID -->
+      <div class="scanner-modal-grid">
+        
+        <!-- LEFT COLUMN: CAMERA VIEWFINDER & DIRECT INPUTS -->
+        <div class="scanner-col-camera">
+          
+          <!-- Viewport with cyber corners, center crosshair and laser line — BIG SQUARE -->
+          <div class="scanner-viewport-box" id="scanner-viewport-container">
+            <div class="scanner-hud-bracket scanner-hud-tl"></div>
+            <div class="scanner-hud-bracket scanner-hud-tr"></div>
+            <div class="scanner-hud-bracket scanner-hud-bl"></div>
+            <div class="scanner-hud-bracket scanner-hud-br"></div>
+            <div class="scanner-center-crosshair"></div>
+            <div class="scanner-laser-line" id="scanner-laser"></div>
+            <div id="scanner-camera-view"></div>
+          </div>
+
+          <!-- Live Scan Status Banner / Cadet Feedback -->
+          <div id="scanner-feedback" class="scanner-feedback-banner">
+            <div id="scanner-feedback-icon" style="font-size: 1.5rem; color: #fbbf24; display: flex; align-items: center; justify-content: center;">
+              <i class="fa-solid fa-expand"></i>
+            </div>
+            <div style="flex: 1;">
+              <div style="font-weight: 700; color: #ffffff; font-size: 0.92rem;" id="scanner-feedback-title">Ready to Scan</div>
+              <div style="font-size: 0.8rem; color: #cbd5e1; margin-top: 0.15rem;" id="scanner-feedback-desc">Align cadet digital QR badge within frame or choose file below.</div>
+            </div>
+            <div id="scanner-feedback-actions" style="display: none;">
+              <button type="button" onclick="startModalCamera()" class="scanner-btn-tool" style="background: rgba(34,197,94,0.2) !important; border-color: #22c55e !important; color: #4ade80 !important;">
+                <i class="fa-solid fa-arrows-rotate"></i> Retry
+              </button>
+            </div>
+          </div>
+
+          <!-- Secondary Actions Strip: QR from File & Manual Student ID -->
+          <div style="display: flex; gap: 0.65rem; flex-wrap: wrap;">
+            
+            <!-- Scan QR from Photo / File -->
+            <label class="scanner-file-btn" style="flex: 1; min-width: 180px;" title="Upload Cadet QR Code Screenshot or Photo">
+              <i class="fa-solid fa-file-image" style="color: #fbbf24; font-size: 1rem;"></i>
+              <span>Scan QR from File</span>
+              <input type="file" id="modal-qr-file-input" accept="image/*" style="display: none;" onchange="handleModalFileScan(event)">
+            </label>
+
+            <!-- Manual Student ID Quick Input -->
+            <div style="flex: 1.35; min-width: 220px; display: flex; gap: 0.4rem;">
+              <input type="text" id="modal-manual-token-input" class="scanner-manual-input" style="flex: 1;" placeholder="Manual ID (e.g. 24-000001)" onkeydown="if(event.key==='Enter') handleModalManualScan()">
+              <button type="button" class="scanner-mark-btn" onclick="handleModalManualScan()" title="Mark attendance manually">
+                <i class="fa-solid fa-arrow-right"></i> <span>Mark</span>
+              </button>
+            </div>
+          </div>
+
+        </div>
+
+        <!-- RIGHT COLUMN: RECENT SCANS STREAM -->
+        <div class="scanner-col-stream">
+          
+          <div style="display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid rgba(184, 142, 44, 0.3); padding-bottom: 0.65rem;">
+            <div style="font-weight: 700; font-size: 0.95rem; color: #ffffff; display: flex; align-items: center; gap: 0.45rem; letter-spacing: 0.03em;">
+              <i class="fa-solid fa-list-check" style="color: #fbbf24;"></i>
+              <span>Recent Scans Stream</span>
+            </div>
+            <span id="modal-stream-counter" style="background: rgba(34, 197, 94, 0.2); color: #4ade80; border: 1px solid rgba(74, 222, 128, 0.4); font-size: 0.72rem; font-weight: 800; padding: 0.25rem 0.65rem; border-radius: 12px;">
+              0 Scanned
+            </span>
+          </div>
+
+          <!-- Search Filter within Stream -->
+          <div style="position: relative;">
+            <i class="fa-solid fa-magnifying-glass" style="position: absolute; left: 0.75rem; top: 50%; transform: translateY(-50%); font-size: 0.8rem; color: #94a3b8;"></i>
+            <input type="text" id="modal-stream-search" class="scanner-stream-search-input" placeholder="Filter recent scans..." oninput="filterModalStream()">
+          </div>
+
+          <!-- Live Stream Scrollable List -->
+          <div id="modal-stream-list" class="scanner-stream-list">
+            <div style="text-align: center; padding: 3rem 1rem; color: #94a3b8; font-size: 0.84rem;">
+              <i class="fa-solid fa-qrcode" style="font-size: 2.2rem; color: #4ade80; opacity: 0.4; margin-bottom: 0.6rem; display: block;"></i>
+              <div style="color: #e2e8f0; font-weight: 600; margin-bottom: 0.25rem;">No cadets scanned yet for this session.</div>
+              Camera and file uploads will log scans here in real-time.
+            </div>
+          </div>
+
+        </div>
+
+      </div>
+
+    </div>
+
+
+<!-- ====== MODERN FLOATING TOAST NOTIFICATION ====== -->
+  <div id="portal-toast" class="portal-toast" role="status" aria-live="polite">
+    <i id="portal-toast-icon" class="fa-solid fa-circle-check" style="font-size: 1.1rem; color: var(--portal-brass);"></i>
+    <span id="portal-toast-msg">Notification message</span>
+  </div>
+
+  <!-- ====== PAGE LOGIC SCRIPT ====== -->
+  <script>
+    // State storage
+    let currentOfficer = null;
+    let allCadets = [];
+    let allSessions = [];
+    let cachedAttendanceRecords = [];
+    let activeStatusFilter = 'all';  // 'all' | 'PRESENT' | 'LATE' | 'EXCUSED' | 'ABSENT'
+    let activePlatoonFilter = 'all';
+    let currentTableDensity = localStorage.getItem('rotcims-table-density') || 'comfortable';
+
+    // ── INITIALIZATION ──────────────────────────────────────────────────
+    document.addEventListener("DOMContentLoaded", async () => {
+      // 1. Render Skeleton Placeholders immediately for comfortable UX
+      renderSkeletonRows();
+
+      // 2. Security Guard
+      currentOfficer = await Auth.requireAuth(["admin", "officer", "personnel", "platoon_leader"]);
+      if (!currentOfficer) return;
+      if (window.RBAC) { await window.RBAC.applyUIRestrictions("attendance"); }
+      if (!currentOfficer) return;
+
+      // 3. Pre-fill today's date in new session modal
+      const sessDateEl = document.getElementById("sess-date");
+      if (sessDateEl) sessDateEl.valueAsDate = new Date();
+
+      // 4. Set initial density
+      applyTableDensity(currentTableDensity);
+
+      // 5. Setup keyboard shortcuts (/ to search, ESC to close modal)
+      setupKeyboardShortcuts();
+
+      // 6. Fetch operational data
+      try {
+        await syncMissingCadets();
+        await loadSessionFilter();
+        await loadCadets();
+        await loadRecords();
+      } catch (err) {
+        console.error("Initialization error:", err);
+        showPortalToast("Error initializing records: " + err.message, "error");
+      }
+    });
+
+    // ── SKELETON LOADER ─────────────────────────────────────────────────
+    function renderSkeletonRows() {
+      const tbody = document.getElementById("attendance-tbody");
+      if (!tbody) return;
+      
+      const rows = Array.from({ length: 6 }).map(() => `
+        <tr>
+          <td><span class="skeleton-shimmer skeleton-line" style="width: 140px;"></span></td>
+          <td><span class="skeleton-shimmer skeleton-line" style="width: 90px;"></span></td>
+          <td><span class="skeleton-shimmer skeleton-line" style="width: 100px;"></span></td>
+          <td><span class="skeleton-shimmer skeleton-line" style="width: 80px;"></span></td>
+          <td><span class="skeleton-shimmer skeleton-line" style="width: 120px;"></span></td>
+          <td><span class="skeleton-shimmer skeleton-line" style="width: 60px;"></span></td>
+          <td><span class="skeleton-shimmer skeleton-pill" style="width: 50px;"></span></td>
+          <td><span class="skeleton-shimmer skeleton-pill" style="width: 80px;"></span></td>
+          <td style="text-align: right;"><span class="skeleton-shimmer skeleton-line" style="width: 40px; display: inline-block;"></span></td>
+        </tr>
+      `).join('');
+      tbody.innerHTML = rows;
+
+      const mobContainer = document.getElementById("attendance-mobile-cards");
+      if (mobContainer) {
+        mobContainer.innerHTML = `
+          <div style="text-align: center; padding: 2rem; color: var(--portal-muted);">
+            <i class="fa-solid fa-spinner fa-spin" style="font-size: 1.5rem; margin-bottom: 0.5rem; color: var(--portal-brass);"></i>
+            <div>Loading tactical attendance records...</div>
+          </div>
+        `;
+      }
+    }
+
+    // ── KEYBOARD SHORTCUTS ──────────────────────────────────────────────
+    function setupKeyboardShortcuts() {
+      document.addEventListener("keydown", (e) => {
+        // Press "/" to focus search (if not already inside an input)
+        if (e.key === "/" && !["INPUT", "TEXTAREA", "SELECT"].includes(document.activeElement.tagName)) {
+          e.preventDefault();
+          const searchInput = document.getElementById("att-search");
+          if (searchInput) searchInput.focus();
+        }
+        // Press "Escape" to close any active modal
+        if (e.key === "Escape") {
+          closeModals();
+        }
+      });
+    }
+
+    // ── TOAST NOTIFICATIONS ─────────────────────────────────────────────
+    let toastTimeout = null;
+    window.showPortalToast = function(message, type = "success") {
+      const toast = document.getElementById("portal-toast");
+      const msgEl = document.getElementById("portal-toast-msg");
+      const iconEl = document.getElementById("portal-toast-icon");
+      if (!toast || !msgEl) return;
+
+      toast.className = `portal-toast toast-${type} active`;
+      msgEl.textContent = message;
+
+      if (iconEl) {
+        if (type === "error") iconEl.className = "fa-solid fa-circle-xmark";
+        else if (type === "warning") iconEl.className = "fa-solid fa-triangle-exclamation";
+        else if (type === "info") iconEl.className = "fa-solid fa-circle-info";
+        else iconEl.className = "fa-solid fa-circle-check";
+      }
+
+      if (toastTimeout) clearTimeout(toastTimeout);
+      toastTimeout = setTimeout(() => {
+        toast.classList.remove("active");
+      }, 3500);
+    };
+    // Alias for legacy calls
+    window.showMobileToast = window.showPortalToast;
+
+    // ── MODAL MANAGEMENT ────────────────────────────────────────────────
+    function closeModals() {
+      document.querySelectorAll(".modal-overlay").forEach(m => m.classList.remove("active"));
+    }
+
+    function handleModalBackdropClick(e, modalId) {
+      if (e.target.id === modalId) {
+        closeModals();
+      }
+    }
+
+    // ── TABLE DENSITY TOGGLE ────────────────────────────────────────────
+    function setTableDensity(density) {
+      currentTableDensity = density;
+      localStorage.setItem('rotcims-table-density', density);
+      applyTableDensity(density);
+    }
+
+    function applyTableDensity(density) {
+      const table = document.getElementById("attendance-data-table");
+      const btnComfort = document.getElementById("density-comfortable-btn");
+      const btnCompact = document.getElementById("density-compact-btn");
+
+      if (density === 'compact') {
+        if (table) table.classList.add("table-compact");
+        if (btnComfort) btnComfort.classList.remove("active");
+        if (btnCompact) btnCompact.classList.add("active");
+      } else {
+        if (table) table.classList.remove("table-compact");
+        if (btnComfort) btnComfort.classList.add("active");
+        if (btnCompact) btnCompact.classList.remove("active");
+      }
+    }
+
+    // ── INTERACTIVE LIVE KPI QUICK-FILTERS ──────────────────────────────
+    function setAttFilter(status) {
+      // Toggle logic: clicking the already-selected filter resets to 'all'
+      if (activeStatusFilter === status && status !== 'all') {
+        activeStatusFilter = 'all';
+      } else {
+        activeStatusFilter = status;
+      }
+
+      // Synchronize dropdown
+      const statusSelect = document.getElementById("filter-status");
+      if (statusSelect) statusSelect.value = activeStatusFilter;
+
+      // Update KPI card active highlights
+      const cards = {
+        'all': document.getElementById("kpi-card-total"),
+        'PRESENT': document.getElementById("kpi-card-present"),
+        'LATE': document.getElementById("kpi-card-late"),
+        'ABSENT': document.getElementById("kpi-card-absent"),
+        'EXCUSED': document.getElementById("kpi-card-excused"),
+      };
+
+      Object.entries(cards).forEach(([key, cardEl]) => {
+        if (!cardEl) return;
+        if (key === activeStatusFilter) {
+          cardEl.classList.add("active-filter");
+        } else {
+          cardEl.classList.remove("active-filter");
+        }
+      });
+
+      // Update filter indicator badge in table header
+      const filterBadge = document.getElementById("active-filter-indicator");
+      if (filterBadge) {
+        if (activeStatusFilter !== 'all') {
+          filterBadge.style.display = "inline-flex";
+          filterBadge.textContent = `Filter: ${activeStatusFilter}`;
+        } else {
+          filterBadge.style.display = "none";
+        }
+      }
+
+      filterAndRenderRecords();
+    }
+
+    function onStatusFilterChanged(val) {
+      setAttFilter(val);
+    }
+
+    function onPlatoonFilterChanged(val) {
+      activePlatoonFilter = val;
+      filterAndRenderRecords();
+    }
+
+    // ── DATABASE SYNC & SESSION RETRIEVAL ────────────────────────────────
+    async function syncMissingCadets() {
+      try {
+        const { data: profs } = await window.supabaseClient
+          .from("profiles")
+          .select("id, company, platoon, role")
+          .eq("role", "cadet");
+
+        if (profs && profs.length > 0) {
+          for (const p of profs) {
+            const { data: existing } = await window.supabaseClient
+              .from("cadets")
+              .select("id")
+              .eq("profile_id", p.id)
+              .maybeSingle();
+
+            if (!existing) {
+              await window.supabaseClient
+                .from("cadets")
+                .insert({
+                  profile_id: p.id,
+                  rotc_unit: p.company || "Alpha Company",
+                  rank: "Cadet"
+                });
+            }
+          }
+        }
+      } catch (e) {
+        console.warn("syncMissingCadets note:", e);
+      }
+    }
+
+    async function loadSessionFilter() {
+      const { data: sessions } = await window.supabaseClient
+        .from("attendance_sessions")
+        .select("id, title, session_date, is_open, start_time, end_time, location, allowed_scanner_type")
+        .order("session_date", { ascending: false });
+
+      allSessions = sessions || [];
+
+      const selFilter = document.getElementById("filter-session");
+      const selMan = document.getElementById("man-session");
+
+      if (allSessions && allSessions.length > 0) {
+        selFilter.innerHTML = '<option value="all">All Formation Sessions</option>' +
+          allSessions.map(s => `<option value="${s.id}">${s.is_open ? '🟢' : '⚪'} ${s.title} (${s.session_date})</option>`).join('');
+
+        selMan.innerHTML = allSessions.map(s => `<option value="${s.id}">${s.title} (${s.session_date})</option>`).join('');
+      } else {
+        selFilter.innerHTML = '<option value="all">No Sessions Created</option>';
+        selMan.innerHTML = '<option value="">No Sessions Available</option>';
+      }
+
+      updateTopBarSessionSubtitle();
+    }
+
+    function updateTopBarSessionSubtitle() {
+      const selectedId = document.getElementById("filter-session")?.value;
+      const subtitle = document.getElementById("topbar-session-subtitle");
+      if (!subtitle) return;
+
+      if (selectedId && selectedId !== "all") {
+        const s = allSessions.find(x => x.id === selectedId);
+        if (s) {
+          const statusText = s.is_open ? "🟢 Active Formation" : "⚪ Closed Session";
+          subtitle.textContent = `${s.title} • ${s.session_date} (${statusText})`;
+          return;
+        }
+      }
+      subtitle.textContent = "Real-time attendance roster, automated tracking, and rapid field adjustments.";
+    }
+
+    function onFilterSessionChanged() {
+      const selVal = document.getElementById("filter-session").value;
+      const actionGroup = document.getElementById("session-action-group");
+      const statusBadge = document.getElementById("att-session-status-badge");
+      const toggleBtn = document.getElementById("btn-att-toggle-open");
+
+      updateTopBarSessionSubtitle();
+
+      if (selVal === "all" || !selVal) {
+        if (actionGroup) actionGroup.style.display = "none";
+        if (statusBadge) statusBadge.style.display = "none";
+        loadRecords();
+        return;
+      }
+
+      const session = allSessions.find(s => s.id === selVal);
+      if (session) {
+        if (actionGroup) actionGroup.style.display = "flex";
+        if (statusBadge) {
+          statusBadge.style.display = "inline-flex";
+          if (session.is_open) {
+            statusBadge.className = "session-status-pill pill-open";
+            statusBadge.innerHTML = '<span class="status-pulse-dot"></span><span>OPEN</span>';
+          } else {
+            statusBadge.className = "session-status-pill pill-closed";
+            statusBadge.innerHTML = '<span></span><span>CLOSED</span>';
+          }
+        }
+
+        if (toggleBtn) {
+          if (session.is_open) {
+            toggleBtn.className = "btn btn-sm btn-outline";
+            toggleBtn.innerHTML = '<i class="fa-solid fa-lock"></i> Close Session';
+          } else {
+            toggleBtn.className = "btn btn-sm btn-brass";
+            toggleBtn.innerHTML = '<i class="fa-solid fa-lock-open"></i> Open Session';
+          }
+        }
+      }
+      loadRecords();
+    }
+
+    async function loadCadets() {
+      const { data: cadetRows, error } = await window.supabaseClient
+        .from("cadets")
+        .select(`
+          id, profile_id,
+          profiles ( first_name, last_name, student_id, course, section )
+        `);
+
+      if (!error && cadetRows && cadetRows.length > 0) {
+        allCadets = cadetRows;
+      } else {
+        const { data: profs } = await window.supabaseClient
+          .from("profiles")
+          .select("id, first_name, last_name, student_id, course, section")
+          .eq("role", "cadet")
+          .order("last_name", { ascending: true });
+
+        allCadets = (profs || []).map(p => ({
+          id: p.id,
+          profile_id: p.id,
+          profiles: p
+        }));
+      }
+
+      allCadets.sort((a, b) => {
+        const la = (a.profiles?.last_name || '').toLowerCase();
+        const lb = (b.profiles?.last_name || '').toLowerCase();
+        return la.localeCompare(lb);
+      });
+
+      const sel = document.getElementById("man-cadet");
+      if (sel) {
+        sel.innerHTML = '<option value="">-- Choose Cadet --</option>' +
+          allCadets.map(c => `<option value="${c.id}">${c.profiles?.last_name || ''}, ${c.profiles?.first_name || ''} (${c.profiles?.student_id || '---'})</option>`).join('');
+      }
+    }
+
+    // ── ATTENDANCE RECORDS RETRIEVAL ─────────────────────────────────────
+    async function loadRecords() {
+      const sessFilter = document.getElementById("filter-session")?.value || "all";
+
+      let query = window.supabaseClient
+        .from("attendance_records")
+        .select(`
+          id, session_id, cadet_id, status, scanned_at, remarks,
+          attendance_sessions ( id, title, session_date ),
+          cadets (
+            id, profile_id,
+            profiles ( first_name, last_name, student_id, course, section, company, platoon )
+          )
+        `)
+        .order("scanned_at", { ascending: false });
+
+      if (sessFilter !== "all") query = query.eq("session_id", sessFilter);
+
+      const { data: records, error } = await query;
+      if (error) {
+        showPortalToast("Failed to load records: " + error.message, "error");
+        console.error("Error loading attendance records:", error);
+      }
+
+      cachedAttendanceRecords = records || [];
+      updateKPIPillCounts();
+      filterAndRenderRecords();
+    }
+
+    // ── KPI COUNTER METRICS UPDATE ───────────────────────────────────────
+    function updateKPIPillCounts() {
+      const allCount     = cachedAttendanceRecords.length;
+      const presentCount = cachedAttendanceRecords.filter(r => (r.status || '').toUpperCase() === 'PRESENT').length;
+      const lateCount    = cachedAttendanceRecords.filter(r => (r.status || '').toUpperCase() === 'LATE').length;
+      const excusedCount = cachedAttendanceRecords.filter(r => (r.status || '').toUpperCase() === 'EXCUSED').length;
+      const absentCount  = cachedAttendanceRecords.filter(r => (r.status || '').toUpperCase() === 'ABSENT').length;
+
+      const setEl = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val; };
+
+      setEl("mob-stat-total",   allCount);
+      setEl("mob-stat-present", presentCount);
+      setEl("mob-stat-late",    lateCount);
+      setEl("mob-stat-excused", excusedCount);
+      setEl("mob-stat-absent",  absentCount);
+
+      // Calculate attendance percentage
+      const pctEl = document.getElementById("kpi-present-pct");
+      if (pctEl) {
+        const pct = allCount > 0 ? Math.round((presentCount / allCount) * 100) : 0;
+        pctEl.innerHTML = `<i class="fa-solid fa-chart-line"></i> ${pct}% attendance rate`;
+      }
+    }
+
+    // ── SEARCH & FILTERING ───────────────────────────────────────────────
+    function filterAndRenderRecords() {
+      const search = (document.getElementById("att-search")?.value || "").toLowerCase().trim();
+      const clearBtn = document.getElementById("search-clear-btn");
+      if (clearBtn) clearBtn.style.display = search ? "block" : "none";
+
+      let filtered = cachedAttendanceRecords;
+
+      // Status filter
+      if (activeStatusFilter && activeStatusFilter !== 'all') {
+        filtered = filtered.filter(r => (r.status || '').toUpperCase() === activeStatusFilter.toUpperCase());
+      }
+
+      // Platoon filter
+      if (activePlatoonFilter && activePlatoonFilter !== 'all') {
+        filtered = filtered.filter(r => {
+          const profile = r.cadets?.profiles || {};
+          return (profile.platoon || '').toLowerCase().includes(activePlatoonFilter.toLowerCase());
+        });
+      }
+
+      // Text search
+      if (search) {
+        filtered = filtered.filter(r => {
+          const profile = r.cadets?.profiles || {};
+          const name = `${profile.first_name || ''} ${profile.last_name || ''}`.toLowerCase();
+          const sid = (profile.student_id || '').toLowerCase();
+          const sess = (r.attendance_sessions?.title || '').toLowerCase();
+          const course = (profile.course || '').toLowerCase();
+          const section = (profile.section || '').toLowerCase();
+          const platoon = (profile.platoon || '').toLowerCase();
+          return name.includes(search) || sid.includes(search) || sess.includes(search) || course.includes(search) || section.includes(search) || platoon.includes(search);
+        });
+      }
+
+      const countEl = document.getElementById("record-count");
+      if (countEl) countEl.textContent = `${filtered.length} Records`;
+
+      renderDesktopAttendance(filtered);
+      renderMobileAttendanceCards(filtered);
+    }
+
+    function clearSearch() {
+      const searchInput = document.getElementById("att-search");
+      if (searchInput) {
+        searchInput.value = "";
+        searchInput.focus();
+      }
+      filterAndRenderRecords();
+    }
+
+    // ── DESKTOP TABLE RENDERER (WITH INLINE 1-CLICK STATUS SELECTOR) ─────
+    function renderDesktopAttendance(records) {
+      const tbody = document.getElementById("attendance-tbody");
+      if (!tbody) return;
+
+      if (records.length === 0) {
+        tbody.innerHTML = `
+          <tr>
+            <td colspan="9" style="text-align: center; padding: 3rem 1.5rem; color: var(--portal-muted);">
+              <i class="fa-solid fa-clipboard-question" style="font-size: 2.2rem; color: var(--portal-brass); margin-bottom: 0.65rem; display: block;"></i>
+              <div style="font-weight: 700; font-size: 1rem; color: var(--portal-ink);">No attendance records found</div>
+              <div style="font-size: 0.82rem; margin-top: 0.25rem;">Try adjusting your search criteria, formation session, or status filters.</div>
+            </td>
+          </tr>
+        `;
+        return;
+      }
+
+      tbody.innerHTML = records.map(r => {
+        const profile = r.cadets?.profiles || {};
+        const first = profile.first_name || '';
+        const last = profile.last_name || '';
+        const initials = ((first[0] || '') + (last[0] || 'C')).toUpperCase();
+        const fullName = `${last ? last + ', ' : ''}${first}`.trim() || 'Cadet';
+        const studentId = profile.student_id || '---';
+        const courseSec = `${profile.course || ''} ${profile.section || ''}`.trim() || 'ROTC';
+        const platoon = profile.platoon || 'Unassigned';
+        const sessionTitle = r.attendance_sessions?.title || 'Drill Session';
+        const sessionDate = r.attendance_sessions?.session_date ? `(${r.attendance_sessions.session_date})` : '';
+        const timeIn = r.scanned_at ? new Date(r.scanned_at).toLocaleTimeString('en-PH', { hour12: false }) : (r.created_at ? new Date(r.created_at).toLocaleTimeString('en-PH', { hour12: false }) : '---');
+        const status = (r.status || 'present').toUpperCase();
+        const method = r.remarks && r.remarks.toLowerCase().includes('manual') ? 'MANUAL' : 'QR';
+
+        return `
+          <tr id="row-${r.id}">
+            <td>
+              <div style="display: flex; align-items: center; gap: 0.65rem;">
+                <div style="width: 32px; height: 32px; border-radius: 50%; background: linear-gradient(135deg, #153825, #b88e2c); color: #fff; font-weight: 700; font-size: 0.76rem; display: grid; place-items: center; flex-shrink: 0;">
+                  ${initials}
+                </div>
+                <div>
+                  <div style="font-weight: 700; color: var(--portal-ink);">${fullName}</div>
+                  <div style="font-size: 0.72rem; color: var(--portal-muted);">${profile.company || 'Alpha Company'}</div>
+                </div>
+              </div>
+            </td>
+            <td style="font-family: 'JetBrains Mono', monospace; font-size: 0.82rem; font-weight: 600;">${studentId}</td>
+            <td style="font-size: 0.82rem;">${courseSec}</td>
+            <td style="font-size: 0.82rem; font-weight: 600; color: var(--portal-muted);">${platoon}</td>
+            <td>
+              <div style="font-weight: 600; font-size: 0.84rem;">${sessionTitle}</div>
+              <div style="font-size: 0.72rem; color: var(--portal-light-text);">${sessionDate}</div>
+            </td>
+            <td style="font-family: 'JetBrains Mono', monospace; font-size: 0.82rem;">
+              <i class="fa-regular fa-clock" style="font-size: 0.75rem; color: var(--portal-muted); margin-right: 0.25rem;"></i>${timeIn}
+            </td>
+            <td><span class="badge ${method === 'QR' ? 'badge-admin' : 'badge-warning'}">${method}</span></td>
+            <td>
+              <!-- Interactive Inline 1-Click Status Toggler -->
+              <select class="status-inline-pill status-${status.toLowerCase()}" onchange="updateStatus('${r.id}', this.value)" title="Change status instantly">
+                <option value="present" ${status === 'PRESENT' ? 'selected' : ''}>✓ PRESENT</option>
+                <option value="late" ${status === 'LATE' ? 'selected' : ''}>⏳ LATE</option>
+                <option value="excused" ${status === 'EXCUSED' ? 'selected' : ''}>📋 EXCUSED</option>
+                <option value="absent" ${status === 'ABSENT' ? 'selected' : ''}>✕ ABSENT</option>
+              </select>
+            </td>
+            <td style="text-align: right;">
+              <button type="button" class="btn btn-sm btn-outline" onclick="deleteAttendanceRecord('${r.id}', '${fullName}')" title="Delete record" style="padding: 0.25rem 0.5rem; color: var(--portal-danger);">
+                <i class="fa-solid fa-trash-can"></i>
+              </button>
+            </td>
+          </tr>
+        `;
+      }).join('');
+    }
+
+    // ── MOBILE HANDHELD CARDS RENDERER ──────────────────────────────────
+    function renderMobileAttendanceCards(records) {
+      const container = document.getElementById("attendance-mobile-cards");
+      if (!container) return;
+
+      if (records.length === 0) {
+        container.innerHTML = `
+          <div style="text-align: center; padding: 2.5rem 1rem; color: var(--portal-muted); font-size: 0.9rem;">
+            <i class="fa-solid fa-clipboard-question" style="font-size: 2rem; color: var(--portal-brass); margin-bottom: 0.5rem; display: block;"></i>
+            No attendance records found for this filter.
+          </div>
+        `;
+        return;
+      }
+
+      container.innerHTML = records.map(r => {
+        const profile = r.cadets?.profiles || {};
+        const first = profile.first_name || '';
+        const last = profile.last_name || 'Cadet';
+        const initials = ((first[0] || '') + (last[0] || 'C')).toUpperCase();
+        const fullName = `${first} ${last}`.trim() || 'Cadet';
+        const studentId = profile.student_id ? `ID: ${profile.student_id}` : 'No ID';
+        const courseSec = `${profile.course || ''} ${profile.section || ''}`.trim();
+        const platoon = profile.platoon ? `• ${profile.platoon}` : '';
+        const sessionTitle = r.attendance_sessions?.title || 'Formation Drill';
+        const timeIn = r.scanned_at ? `🕒 ${new Date(r.scanned_at).toLocaleTimeString('en-PH', { hour12: false })}` : 'No time-in';
+        const status = (r.status || 'present').toUpperCase();
+        const method = r.remarks && r.remarks.toLowerCase().includes('manual') ? 'MANUAL' : 'QR';
+
+        return `
+          <div class="card" style="padding: 1.15rem; margin-bottom: 0.85rem; border: 1px solid var(--portal-border);">
+            <div style="display: flex; align-items: flex-start; justify-content: space-between; gap: 0.75rem;">
+              <div style="display: flex; gap: 0.75rem; align-items: center;">
+                <div style="width: 42px; height: 42px; border-radius: 50%; background: linear-gradient(135deg, #153825, #b88e2c); color: #fff; font-weight: 700; font-size: 0.9rem; display: grid; place-items: center; flex-shrink: 0;">
+                  ${initials}
+                </div>
+                <div>
+                  <div style="font-weight: 700; font-size: 0.95rem; color: var(--portal-ink);">${fullName}</div>
+                  <div style="font-size: 0.76rem; color: var(--portal-muted); font-family: monospace;">${studentId} ${courseSec ? '• ' + courseSec : ''} ${platoon}</div>
+                </div>
+              </div>
+              <span class="badge ${method === 'QR' ? 'badge-admin' : 'badge-warning'}">${method}</span>
+            </div>
+
+            <div style="margin: 0.75rem 0 0.5rem; font-size: 0.78rem; color: var(--portal-muted); display: flex; justify-content: space-between; align-items: center;">
+              <span><i class="fa-solid fa-flag" style="color: var(--portal-brass);"></i> ${sessionTitle}</span>
+              <span>${timeIn}</span>
+            </div>
+
+            <!-- Quick Status Toggler on Mobile -->
+            <div style="display: flex; align-items: center; justify-content: space-between; margin-top: 0.75rem; padding-top: 0.65rem; border-top: 1px solid var(--portal-border-subtle);">
+              <span style="font-size: 0.78rem; font-weight: 600; color: var(--portal-muted);">Status Action:</span>
+              <select class="status-inline-pill status-${status.toLowerCase()}" onchange="updateStatus('${r.id}', this.value)">
+                <option value="present" ${status === 'PRESENT' ? 'selected' : ''}>✓ PRESENT</option>
+                <option value="late" ${status === 'LATE' ? 'selected' : ''}>⏳ LATE</option>
+                <option value="excused" ${status === 'EXCUSED' ? 'selected' : ''}>📋 EXCUSED</option>
+                <option value="absent" ${status === 'ABSENT' ? 'selected' : ''}>✕ ABSENT</option>
+              </select>
+            </div>
+          </div>
+        `;
+      }).join('');
+    }
+
+    // ── STATUS UPDATER WITH OPTIMISTIC UI FEEDBACK ───────────────────────
+    async function updateStatus(recordId, newStatus) {
+      const dbStatus = newStatus.toLowerCase();
+      
+      // Optimistic update in cache
+      const item = cachedAttendanceRecords.find(r => r.id === recordId);
+      const prevStatus = item ? item.status : null;
+      if (item) item.status = dbStatus;
+      
+      updateKPIPillCounts();
+
+      // Send to Supabase
+      const { error } = await window.supabaseClient
+        .from("attendance_records")
+        .update({ status: dbStatus })
+        .eq("id", recordId);
+
+      if (error) {
+        // Revert on failure
+        if (item && prevStatus) item.status = prevStatus;
+        updateKPIPillCounts();
+        filterAndRenderRecords();
+        showPortalToast("Failed to update status: " + error.message, "error");
+      } else {
+        showPortalToast(`Status updated to ${newStatus.toUpperCase()}`, "success");
+        // Re-render to refresh badges and styles cleanly
+        filterAndRenderRecords();
+      }
+    }
+
+    // ── DELETE ATTENDANCE RECORD ─────────────────────────────────────────
+    async function deleteAttendanceRecord(recordId, cadetName) {
+      if (!confirm(`Remove attendance entry for ${cadetName}?`)) return;
+
+      const { error } = await window.supabaseClient
+        .from("attendance_records")
+        .delete()
+        .eq("id", recordId);
+
+      if (error) {
+        showPortalToast("Failed to delete record: " + error.message, "error");
+      } else {
+        cachedAttendanceRecords = cachedAttendanceRecords.filter(r => r.id !== recordId);
+        updateKPIPillCounts();
+        filterAndRenderRecords();
+        showPortalToast("Attendance record removed.", "info");
+      }
+    }
+
+    // ── EXPORT DROPDOWN TOGGLE ───────────────────────────────────────────
+    function toggleExportDropdown() {
+      const menu = document.getElementById('export-dropdown-menu');
+      const caret = document.getElementById('export-caret');
+      const open = menu.style.display === 'block';
+      menu.style.display = open ? 'none' : 'block';
+      if (caret) caret.style.transform = open ? '' : 'rotate(180deg)';
+    }
+    // Close dropdown on outside click
+    document.addEventListener('click', function(e) {
+      const wrapper = document.getElementById('export-dropdown-wrapper');
+      if (wrapper && !wrapper.contains(e.target)) {
+        const menu = document.getElementById('export-dropdown-menu');
+        const caret = document.getElementById('export-caret');
+        if (menu) menu.style.display = 'none';
+        if (caret) caret.style.transform = '';
+      }
+    });
+
+    // ── EXPORT & ARCHIVE ENGINE ───────────────────────────────────────────
+    function doExportAndArchive(fmt) {
+      const menu = document.getElementById('export-dropdown-menu');
+      if (menu) menu.style.display = 'none';
+
+      const sess = document.getElementById("filter-session")?.value || "all";
+      const st = activeStatusFilter || "all";
+      const plt = activePlatoonFilter || "all";
+
+      // Build file metadata for the archive
+      const now = new Date();
+      const dateStr = now.toLocaleDateString('en-PH', {year:'numeric',month:'long',day:'numeric'});
+      const timeStr = now.toLocaleTimeString('en-PH', {hour:'2-digit',minute:'2-digit'});
+      const sessName = (() => {
+        const el = document.getElementById('filter-session');
+        const opt = el?.options[el.selectedIndex];
+        return (opt && opt.value !== 'all') ? opt.text : 'All Sessions';
+      })();
+      const recCount = document.querySelectorAll('#att-tbody tr[data-record-id]').length || filteredRecords?.length || 0;
+
+      const fileEntry = {
+        id: 'rpt-' + Date.now(),
+        name: `ROTCIMS_Attendance_${sessName.replace(/[^a-zA-Z0-9]/g,'_')}_${now.toISOString().split('T')[0]}`,
+        format: fmt.toUpperCase(),
+        session: sessName,
+        created_at: now.toISOString(),
+        date_label: `${dateStr} at ${timeStr}`,
+        record_count: recCount,
+        session_id: sess,
+        status_filter: st,
+        platoon_filter: plt,
+      };
+
+      // Save to localStorage archive (persists in browser)
+      const archives = JSON.parse(localStorage.getItem('rotcims_report_files') || '[]');
+      archives.unshift(fileEntry);
+      localStorage.setItem('rotcims_report_files', JSON.stringify(archives.slice(0, 50)));
+
+      showPortalToast(`Saved to Attendance Reports as ${fmt.toUpperCase()} file. Redirecting...`, 'info');
+      setTimeout(() => {
+        window.location.href = `admin-reports.html?session=${encodeURIComponent(sess)}&status=${encodeURIComponent(st)}&platoon=${encodeURIComponent(plt)}&action=${fmt}&tab=archive`;
+      }, 500);
+    }
+
+    function goToReportsPage() {
+      const menu = document.getElementById('export-dropdown-menu');
+      if (menu) menu.style.display = 'none';
+      window.location.href = 'admin-reports.html?tab=archive';
+    }
+
+    // Keep legacy name for compatibility
+        function printOfficialAttendanceLedger() {
+      const sess = document.getElementById("filter-session")?.value || "all";
+      const st = activeStatusFilter || "all";
+      const plt = activePlatoonFilter || "all";
+      showPortalToast("Preparing Official Formation Print Ledger...", "info");
+      setTimeout(() => {
+        window.location.href = `admin-reports.html?session=${encodeURIComponent(sess)}&status=${encodeURIComponent(st)}&platoon=${encodeURIComponent(plt)}&autoPrint=1`;
+      }, 350);
+    }
+
+    function exportAttendanceCSV() { doExportAndArchive('xlsx'); }
+
+    // ── FORMATION SESSION MODAL & CRUD ──────────────────────────────────
+    function openNewSessionModal() {
+      document.getElementById("modal-att-session-title").textContent = "Create Formation Drill Session";
+      document.getElementById("sess-edit-id").value = "";
+      document.getElementById("sess-title").value = "";
+      document.getElementById("sess-date").value = new Date().toISOString().split('T')[0];
+      document.getElementById("sess-location").value = "Grandstand Parade Grounds";
+      document.getElementById("sess-start").value = "07:00";
+      document.getElementById("sess-end").value = "12:00";
+      document.getElementById("sess-is-open").checked = true;
+      // Reset scanner access control to 'all' (default)
+      const radAll = document.getElementById('sess-scanner-type-all');
+      if (radAll) { radAll.checked = true; highlightScannerOption(); }
+      document.getElementById("modal-session").classList.add("active");
+      setTimeout(() => document.getElementById("sess-title")?.focus(), 100);
+    }
+
+    function openEditCurrentSessionModal() {
+      const currentId = document.getElementById("filter-session").value;
+      const session = allSessions.find(s => s.id === currentId);
+      if (!session) {
+        showPortalToast("Please select a specific session from the dropdown to edit.", "warning");
+        return;
+      }
+
+      document.getElementById("modal-att-session-title").textContent = "Edit Formation Drill Session";
+      document.getElementById("sess-edit-id").value = session.id;
+      document.getElementById("sess-title").value = session.title || "";
+      document.getElementById("sess-date").value = session.session_date || "";
+      document.getElementById("sess-location").value = session.location || "";
+      document.getElementById("sess-start").value = session.start_time || "07:00";
+      document.getElementById("sess-end").value = session.end_time || "12:00";
+      document.getElementById("sess-is-open").checked = !!session.is_open;
+      // Restore saved scanner access control type
+      const savedType = session.allowed_scanner_type || 'all';
+      const radEdit = document.querySelector(input[name="sess-scanner-type"][value="${savedType}"]);
+      if (radEdit) { radEdit.checked = true; highlightScannerOption(); }
+      document.getElementById("modal-session").classList.add("active");
+    }
+
+    async function toggleCurrentSessionOpen() {
+      const currentId = document.getElementById("filter-session").value;
+      const session = allSessions.find(s => s.id === currentId);
+      if (!session) return;
+
+      const nextState = !session.is_open;
+      const actionWord = nextState ? "OPEN" : "CLOSE";
+      if (!confirm(`Are you sure you want to ${actionWord} session "${session.title}"?`)) {
+        return;
+      }
+
+      try {
+        const { error } = await window.supabaseClient
+          .from("attendance_sessions")
+          .update({ is_open: nextState })
+          .eq("id", session.id);
+
+        if (error) throw error;
+
+        session.is_open = nextState;
+        showPortalToast(`Session "${session.title}" is now ${nextState ? 'OPEN' : 'CLOSED'}.`, "success");
+        await loadSessionFilter();
+        document.getElementById("filter-session").value = session.id;
+        onFilterSessionChanged();
+      } catch (err) {
+        console.error("Toggle session error:", err);
+        showPortalToast("Failed to toggle session: " + err.message, "error");
+      }
+    }
+
+    async function deleteCurrentSession() {
+      const currentId = document.getElementById("filter-session").value;
+      const session = allSessions.find(s => s.id === currentId);
+      if (!session) return;
+
+      if (!confirm(`⚠️ DANGER: Permanently delete session "${session.title}" (${session.session_date})?\n\nThis will remove the session and all associated attendance records.`)) {
+        return;
+      }
+
+      try {
+        await window.supabaseClient.from("attendance_records").delete().eq("session_id", session.id);
+        const { error } = await window.supabaseClient.from("attendance_sessions").delete().eq("id", session.id);
+        if (error) throw error;
+
+        showPortalToast(`Session "${session.title}" deleted.`, "info");
+        await loadSessionFilter();
+        document.getElementById("filter-session").value = "all";
+        onFilterSessionChanged();
+      } catch (err) {
+        console.error("Delete session error:", err);
+        showPortalToast("Failed to delete session: " + err.message, "error");
+      }
+    }
+
+    async function handleSaveSession(e) {
+      e.preventDefault();
+      const saveBtn = document.getElementById("btn-att-save-session");
+      if (saveBtn) saveBtn.disabled = true;
+
+      const editId = document.getElementById("sess-edit-id").value.trim();
+      const title = document.getElementById("sess-title").value.trim();
+      const session_date = document.getElementById("sess-date").value;
+      const location = document.getElementById("sess-location").value.trim();
+      const start_time = document.getElementById("sess-start").value;
+      const end_time = document.getElementById("sess-end").value;
+      const is_open = document.getElementById("sess-is-open").checked;
+      const allowed_scanner_type = document.querySelector('input[name="sess-scanner-type"]:checked')?.value || 'all';
+
+      const fullPayload = {
+        title,
+        session_date,
+        location: location || null,
+        start_time: start_time || null,
+        end_time: end_time || null,
+        is_open,
+        allowed_scanner_type,
+        target_company: document.getElementById("sess-target-company")?.value || 'all',
+        target_platoon: document.getElementById("sess-target-platoon")?.value || 'all',
+        status: is_open ? "active" : "closed"
+      };
+
+      try {
+        let error = null;
+        if (editId) {
+          const res = await window.supabaseClient.from("attendance_sessions").update(fullPayload).eq("id", editId);
+          error = res.error;
+          if (error && (error.message.includes("end_time") || error.message.includes("location") || error.message.includes("status"))) {
+            const basePayload = { title, session_date, is_open };
+            const retry = await window.supabaseClient.from("attendance_sessions").update(basePayload).eq("id", editId);
+            error = retry.error;
+          }
+        } else {
+          fullPayload.created_by = currentOfficer?.id || null;
+          const res = await window.supabaseClient.from("attendance_sessions").insert(fullPayload).select();
+          error = res.error;
+          if (error && (error.message.includes("end_time") || error.message.includes("location") || error.message.includes("status"))) {
+            const basePayload = { title, session_date, is_open, created_by: currentOfficer?.id || null };
+            const retry = await window.supabaseClient.from("attendance_sessions").insert(basePayload).select();
+            error = retry.error;
+          }
+        }
+
+        if (error) throw error;
+
+        showPortalToast(`Formation session ${editId ? 'updated' : 'created'} successfully!`, "success");
+        closeModals();
+        await loadSessionFilter();
+        if (editId) {
+          document.getElementById("filter-session").value = editId;
+          onFilterSessionChanged();
+        }
+      } catch (err) {
+        console.error("Save session error:", err);
+        showPortalToast("Error saving session: " + err.message, "error");
+      } finally {
+        if (saveBtn) saveBtn.disabled = false;
+      }
+    }
+
+    // ── MANUAL ATTENDANCE ENTRY MODAL & UPSERT ───────────────────────────
+    function openManualAttendanceModal() {
+      const activeSess = document.getElementById("filter-session")?.value;
+      const manSess = document.getElementById("man-session");
+      if (manSess && activeSess && activeSess !== "all") {
+        manSess.value = activeSess;
+      }
+
+      const manTime = document.getElementById("man-time");
+      if (manTime) {
+        const now = new Date();
+        const hrs = String(now.getHours()).padStart(2, '0');
+        const mins = String(now.getMinutes()).padStart(2, '0');
+        manTime.value = `${hrs}:${mins}`;
+      }
+
+      document.getElementById("modal-manual").classList.add("active");
+      setTimeout(() => document.getElementById("man-cadet")?.focus(), 100);
+    }
+
+    async function handleManualEntry(e) {
+      e.preventDefault();
+      const session_id = document.getElementById("man-session").value;
+      const selectedCadetKey = document.getElementById("man-cadet").value;
+      const status = (document.getElementById("man-status").value || "present").toLowerCase();
+      const timeVal = document.getElementById("man-time").value || "07:00";
+
+      if (!session_id || !selectedCadetKey) {
+        showPortalToast("Please select both a session and a cadet.", "warning");
+        return;
+      }
+
+      let actualCadetId = selectedCadetKey;
+      const chosen = allCadets.find(c => c.id === selectedCadetKey);
+      if (chosen && chosen.profile_id) {
+        try {
+          const { data: existing } = await window.supabaseClient
+            .from("cadets")
+            .select("id")
+            .eq("profile_id", chosen.profile_id)
+            .maybeSingle();
+
+          if (existing) {
+            actualCadetId = existing.id;
+          } else {
+            const { data: inserted } = await window.supabaseClient
+              .from("cadets")
+              .insert({ profile_id: chosen.profile_id, rotc_unit: "Alpha Company", rank: "Cadet" })
+              .select("id")
+              .single();
+            if (inserted) actualCadetId = inserted.id;
+          }
+        } catch (err) {
+          console.warn("Could not check/insert cadet record:", err);
+        }
+      }
+
+      const sessionObj = allSessions.find(s => s.id === session_id);
+      const sessDate = sessionObj?.session_date || new Date().toISOString().split('T')[0];
+      const scanned_at = `${sessDate}T${timeVal}:00`;
+
+      const { error } = await window.supabaseClient
+        .from("attendance_records")
+        .upsert({
+          session_id,
+          cadet_id: actualCadetId,
+          status,
+          scanned_at: new Date(scanned_at).toISOString(),
+          recorded_by: currentOfficer?.id || null,
+          remarks: "Manual entry by Command Staff"
+        }, { onConflict: "session_id,cadet_id" });
+
+      if (error) {
+        showPortalToast("Manual entry error: " + error.message, "error");
+      } else {
+        showPortalToast("Attendance recorded successfully!", "success");
+        closeModals();
+        await loadRecords();
+      }
+    }
+  
+    // ========================================================================
+    // TACTICAL LIVE QR SCANNER CONTROLLER (AUDIO, CAMERA, RECENT STREAM, FILE)
+    // ========================================================================
+    let html5QrScanner = null;
+    let currentCameraMode = "environment";
+    let isScannerRunning = false;
+    let isScannerLocked = false;
+    let modalScannedList = [];
+    let scannerSoundMuted = localStorage.getItem("rotcims-scanner-mute") === "true";
+    let audioCtx = null;
+
+    // Web Audio API Synthesizer (Zero External Dependencies)
+    function playScannerBeep(type = 'success') {
+      if (scannerSoundMuted) return;
+      try {
+        if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        if (audioCtx.state === 'suspended') audioCtx.resume();
+        
+        const now = audioCtx.currentTime;
+        if (type === 'success') {
+          const osc1 = audioCtx.createOscillator();
+          const osc2 = audioCtx.createOscillator();
+          const gain = audioCtx.createGain();
+          osc1.type = 'sine'; osc1.frequency.setValueAtTime(880, now);
+          osc2.type = 'sine'; osc2.frequency.setValueAtTime(1760, now + 0.08);
+          gain.gain.setValueAtTime(0.18, now);
+          gain.gain.exponentialRampToValueAtTime(0.001, now + 0.28);
+          osc1.connect(gain); osc2.connect(gain); gain.connect(audioCtx.destination);
+          osc1.start(now); osc1.stop(now + 0.08);
+          osc2.start(now + 0.08); osc2.stop(now + 0.28);
+        } else if (type === 'warning') {
+          const osc = audioCtx.createOscillator();
+          const gain = audioCtx.createGain();
+          osc.type = 'triangle';
+          osc.frequency.setValueAtTime(440, now);
+          osc.frequency.setValueAtTime(320, now + 0.12);
+          gain.gain.setValueAtTime(0.2, now);
+          gain.gain.exponentialRampToValueAtTime(0.001, now + 0.3);
+          osc.connect(gain); gain.connect(audioCtx.destination);
+          osc.start(now); osc.stop(now + 0.3);
+        } else {
+          const osc = audioCtx.createOscillator();
+          const gain = audioCtx.createGain();
+          osc.type = 'sawtooth';
+          osc.frequency.setValueAtTime(220, now);
+          gain.gain.setValueAtTime(0.2, now);
+          gain.gain.exponentialRampToValueAtTime(0.001, now + 0.3);
+          osc.connect(gain); gain.connect(audioCtx.destination);
+          osc.start(now); osc.stop(now + 0.3);
+        }
+      } catch (e) {
+        console.warn("Audio synthesis error:", e);
+      }
+    }
+
+    function toggleScannerSound() {
+      scannerSoundMuted = !scannerSoundMuted;
+      localStorage.setItem("rotcims-scanner-mute", scannerSoundMuted);
+      const btn = document.getElementById("btn-scanner-sound");
+      if (btn) {
+        btn.innerHTML = scannerSoundMuted
+          ? '<i class="fa-solid fa-volume-xmark" style="color:#ef4444;"></i>'
+          : '<i class="fa-solid fa-volume-high"></i>';
+        btn.title = scannerSoundMuted ? "Audio Beep: Muted" : "Audio Beep: Active";
+      }
+      showPortalToast(`Scanner audio ${scannerSoundMuted ? 'muted' : 'unmuted'}`, "info");
+    }
+
+    function showScannerFeedback(type, title, desc) {
+      const banner = document.getElementById("scanner-feedback");
+      const iconEl = document.getElementById("scanner-feedback-icon");
+      const titleEl = document.getElementById("scanner-feedback-title");
+      const descEl = document.getElementById("scanner-feedback-desc");
+      const actionsEl = document.getElementById("scanner-feedback-actions");
+
+      if (!banner || !titleEl || !descEl) return;
+
+      titleEl.textContent = title;
+      descEl.textContent = desc;
+
+      if (actionsEl) {
+        actionsEl.style.display = (type === 'error' && desc.includes('permission')) ? 'block' : 'none';
+      }
+
+      if (type === 'success') {
+        banner.style.borderColor = '#22c55e';
+        banner.style.background = 'rgba(6, 78, 59, 0.55)';
+        titleEl.style.color = '#86efac';
+        descEl.style.color = '#dcfce7';
+        iconEl.innerHTML = '<i class="fa-solid fa-circle-check" style="color:#4ade80;"></i>';
+      } else if (type === 'warning') {
+        banner.style.borderColor = '#eab308';
+        banner.style.background = 'rgba(113, 63, 18, 0.55)';
+        titleEl.style.color = '#fef08a';
+        descEl.style.color = '#fef9c3';
+        iconEl.innerHTML = '<i class="fa-solid fa-triangle-exclamation" style="color:#facc15;"></i>';
+      } else if (type === 'error') {
+        banner.style.borderColor = '#ef4444';
+        banner.style.background = 'rgba(127, 29, 29, 0.55)';
+        titleEl.style.color = '#fecaca';
+        descEl.style.color = '#fee2e2';
+        iconEl.innerHTML = '<i class="fa-solid fa-circle-xmark" style="color:#f87171;"></i>';
+      } else {
+        banner.style.borderColor = 'rgba(184, 142, 44, 0.4)';
+        banner.style.background = 'rgba(0, 0, 0, 0.55)';
+        titleEl.style.color = '#ffffff';
+        descEl.style.color = '#cbd5e1';
+        iconEl.innerHTML = '<i class="fa-solid fa-expand" style="color:#fbbf24;"></i>';
+      }
+    }
+
+    async function openLiveQrScannerModal() {
+      const modal = document.getElementById("modal-qr-scanner");
+      if (!modal) return;
+      modal.classList.add("active");
+
+      // Update sound button UI
+      const soundBtn = document.getElementById("btn-scanner-sound");
+      if (soundBtn) {
+        soundBtn.innerHTML = scannerSoundMuted
+          ? '<i class="fa-solid fa-volume-xmark" style="color:#ef4444;"></i>'
+          : '<i class="fa-solid fa-volume-high"></i>';
+      }
+
+      // Populate & sync session dropdown
+      const mainSess = document.getElementById("filter-session")?.value;
+      const modalSess = document.getElementById("modal-scanner-session");
+      if (modalSess) {
+        modalSess.innerHTML = (allSessions || []).map(s => `
+          <option value="${s.id}" ${s.id === mainSess ? 'selected' : ''}>
+            ${s.title} (${s.session_date})
+          </option>
+        `).join('');
+        if (!modalSess.value && allSessions.length > 0) {
+          modalSess.value = allSessions[0].id;
+        }
+      }
+
+      showScannerFeedback("default", "Ready to Scan", "Align cadet digital QR badge within frame or choose file below.");
+      updateScannerPermissionBadge(modalSess?.value);
+      await loadModalSessionScans();
+      await startModalCamera();
+    }
+
+    async function closeLiveQrScannerModal() {
+      await stopModalCamera();
+      const modal = document.getElementById("modal-qr-scanner");
+      if (modal) modal.classList.remove("active");
+
+      // Sync filter session back if changed inside modal
+      const modalSess = document.getElementById("modal-scanner-session")?.value;
+      const filterSess = document.getElementById("filter-session");
+      if (modalSess && filterSess && filterSess.value !== modalSess) {
+        filterSess.value = modalSess;
+      }
+
+      // Reload background records and KPIs
+      await loadRecords();
+    }
+
+    async function onModalScannerSessionChange() {
+      const activeSess = document.getElementById("modal-scanner-session")?.value;
+      updateScannerPermissionBadge(activeSess);
+      await loadModalSessionScans();
+      showScannerFeedback("default", "Session Updated", "Scanning now records into the selected formation drill.");
+    }
+
+    async function startModalCamera() {
+      if (isScannerRunning) return;
+      try {
+        if (!html5QrScanner) {
+          html5QrScanner = new Html5Qrcode("scanner-camera-view");
+        }
+        const config = {
+          fps: 24,
+          qrbox: function(viewfinderWidth, viewfinderHeight) {
+            const minEdge = Math.min(viewfinderWidth, viewfinderHeight);
+            const qrEdge = Math.max(260, Math.floor(minEdge * 0.85));
+            return { width: qrEdge, height: qrEdge };
+          },
+          aspectRatio: 1.0
+        };
+        await html5QrScanner.start(
+          { facingMode: currentCameraMode },
+          config,
+          onQrCodeDetected,
+          () => { /* frame drop */ }
+        );
+        isScannerRunning = true;
+        document.getElementById("scanner-laser")?.style.setProperty("display", "block");
+      } catch (err) {
+        console.error("Camera start failed:", err);
+        showScannerFeedback("error", "Camera Unavailable", "Please grant camera permission or use the File Upload / Manual ID option below.");
+      }
+    }
+
+    async function stopModalCamera() {
+      if (html5QrScanner && isScannerRunning) {
+        try {
+          await html5QrScanner.stop();
+        } catch (e) {
+          console.warn("Camera stop error:", e);
+        }
+        isScannerRunning = false;
+      }
+      document.getElementById("scanner-laser")?.style.setProperty("display", "none");
+    }
+
+    async function flipModalCamera() {
+      await stopModalCamera();
+      currentCameraMode = (currentCameraMode === "environment") ? "user" : "environment";
+      await startModalCamera();
+      showPortalToast(`Camera switched to ${currentCameraMode === "environment" ? "Back (Environment)" : "Front (User)"}`, "info");
+    }
+
+    async function onQrCodeDetected(decodedText) {
+      if (isScannerLocked) return;
+      isScannerLocked = true;
+
+      const sessionId = document.getElementById("modal-scanner-session")?.value;
+      if (!sessionId) {
+        showScannerFeedback("error", "No Session Selected", "Please select a formation session first.");
+        isScannerLocked = false;
+        return;
+      }
+
+      try {
+        const rawText = (decodedText || '').trim();
+        if (!rawText) throw new Error("Empty scan code.");
+
+        let studentIdCandidate = rawText;
+        if (rawText.startsWith("SE-ROTC-")) {
+          const clean = rawText.replace(/^SE-ROTC-/, "");
+          const parts = clean.split("-");
+          studentIdCandidate = (parts.length >= 2) ? parts.slice(0, -1).join("-") : clean;
+        }
+
+        let cadetProfile = null;
+        let cadetRowId = null;
+
+        // 1. Primary lookup by student_id
+        let { data: profileRow } = await window.supabaseClient
+          .from("profiles")
+          .select("id, first_name, last_name, student_id, company, platoon, section, course")
+          .eq("student_id", studentIdCandidate)
+          .maybeSingle();
+
+        if (profileRow) {
+          cadetProfile = profileRow;
+          const { data: cadetRow } = await window.supabaseClient
+            .from("cadets")
+            .select("id")
+            .eq("profile_id", profileRow.id)
+            .maybeSingle();
+          cadetRowId = cadetRow?.id;
+        }
+
+        // 2. Secondary lookup via qr_codes table
+        if (!cadetProfile) {
+          const { data: qrRow } = await window.supabaseClient
+            .from("qr_codes")
+            .select("cadet_id, cadets(id, profile_id, profiles(id, first_name, last_name, student_id, company, platoon, section, course))")
+            .eq("token", rawText)
+            .maybeSingle();
+          if (qrRow?.cadets?.profiles) {
+            cadetProfile = qrRow.cadets.profiles;
+            cadetRowId = qrRow.cadets.id;
+          }
+        }
+
+        // 3. Tertiary raw match
+        if (!cadetProfile) {
+          const { data: p2 } = await window.supabaseClient
+            .from("profiles")
+            .select("id, first_name, last_name, student_id, company, platoon, section, course")
+            .eq("student_id", rawText)
+            .maybeSingle();
+          if (p2) {
+            cadetProfile = p2;
+            const { data: c2 } = await window.supabaseClient
+              .from("cadets")
+              .select("id")
+              .eq("profile_id", p2.id)
+              .maybeSingle();
+            cadetRowId = c2?.id;
+          }
+        }
+
+        if (!cadetProfile) {
+          throw new Error(`Unrecognized Cadet code: "${rawText}"`);
+        }
+
+        // Auto-enroll in cadets table if missing
+        if (!cadetRowId) {
+          const { data: newC } = await window.supabaseClient
+            .from("cadets")
+            .insert({
+              profile_id: cadetProfile.id,
+              rotc_unit: cadetProfile.company || 'Alpha Company',
+              rank: 'Cadet'
+            })
+            .select("id")
+            .single();
+          cadetRowId = newC?.id;
+        }
+
+        // ── PERMISSION CHECK: allowed_scanner_type enforcement ──────────
+        const scannerType = await getSessionScannerType(sessionId);
+        if (scannerType !== 'all') {
+          const scannedIsOfficer = await checkIsOfficer(cadetProfile.id);
+          const cadetDisplayName = `${cadetProfile.last_name || ""}, ${cadetProfile.first_name || ""}`;
+          if (scannerType === 'officers_only' && !scannedIsOfficer) {
+            showScannerDenied(cadetDisplayName, 'You are not authorized to scan attendance for this session. Officers Only.');
+            isScannerLocked = false;
+            return;
+          }
+          if (scannerType === 'cadets_only' && scannedIsOfficer) {
+            showScannerDenied(cadetDisplayName, 'You are not authorized to scan attendance for this session. Cadets Only.');
+            isScannerLocked = false;
+            return;
+          }
+        }
+
+        // Platoon Leader Scanning Guard (Section 8 of Master Specification)
+        if (window.RBAC && window.Auth) {
+          try {
+            const curProf = await window.Auth.getProfile();
+            const offRec = await window.RBAC.getOfficerProfile(curProf?.id);
+            const caps = window.RBAC.getCapabilities(curProf, offRec);
+
+            if (caps.position === 'Platoon Leader' && caps.assignedPlatoon) {
+              const cadetPlatoon = (cadetProfile.platoon || '').trim().toLowerCase();
+              const leaderPlatoon = caps.assignedPlatoon.trim().toLowerCase();
+              if (cadetPlatoon && !cadetPlatoon.includes(leaderPlatoon) && !leaderPlatoon.includes(cadetPlatoon)) {
+                const cadetDisplayName = cadetProfile.last_name + ', ' + cadetProfile.first_name;
+                showScannerDenied(cadetDisplayName, 'You are authorized to record attendance only for your assigned platoon (' + caps.assignedPlatoon + ').');
+                await window.RBAC.logAudit('unauthorized_platoon_scan_attempt', cadetProfile.id, {
+                  platoonLeaderPlatoon: caps.assignedPlatoon,
+                  cadetPlatoon: cadetProfile.platoon,
+                  studentId: cadetProfile.student_id
+                });
+                isScannerLocked = false;
+                return;
+              }
+            }
+          } catch (rErr) {
+            console.warn('RBAC scanner guard check notice:', rErr);
+          }
+        }
+
+
+        // Duplicate Check in active stream
+        const isAlreadyScanned = modalScannedList.some(s => s.cadet_id === cadetRowId);
+        if (isAlreadyScanned) {
+          playScannerBeep('warning');
+          if (navigator.vibrate) navigator.vibrate([200, 100, 200]);
+          showScannerFeedback("warning", "Already Scanned", `${cadetProfile.last_name}, ${cadetProfile.first_name} is already logged for this session!`);
+          setTimeout(() => { isScannerLocked = false; }, 2200);
+          return;
+        }
+
+        const now = new Date();
+        const timeString = now.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+
+        // Upsert into Supabase attendance_records
+        const { error: insErr } = await window.supabaseClient
+          .from("attendance_records")
+          .upsert({
+            session_id: sessionId,
+            cadet_id: cadetRowId,
+            status: "PRESENT",
+            scanned_at: now.toISOString(),
+            recorded_by: currentOfficer?.id || null
+          }, { onConflict: "session_id,cadet_id" });
+
+        if (insErr) throw insErr;
+
+        // Positive Audio & Haptic Confirmation
+        playScannerBeep('success');
+        if (navigator.vibrate) navigator.vibrate([100, 50, 100]);
+
+        showScannerFeedback("success", `PRESENT • ${cadetProfile.last_name}, ${cadetProfile.first_name}`, `${cadetProfile.student_id} • ${cadetProfile.company || 'Alpha'} • ${timeString}`);
+
+        // Prepend to Live Stream in Modal
+        modalScannedList.unshift({
+          cadet_id: cadetRowId,
+          cadet_name: `${cadetProfile.last_name}, ${cadetProfile.first_name}`,
+          student_id: cadetProfile.student_id,
+          unit: `${cadetProfile.company || ''} ${cadetProfile.platoon || ''}`.trim() || 'Cadet',
+          time_in: timeString,
+          status: 'PRESENT'
+        });
+
+        renderModalStreamList();
+        showPortalToast(`Logged ${cadetProfile.last_name}, ${cadetProfile.first_name} as PRESENT`, "success");
+
+      } catch (err) {
+        console.error("Scan error:", err);
+        playScannerBeep('error');
+        showScannerFeedback("error", "Scan Failed", err.message || "Failed to process scan.");
+      } finally {
+        setTimeout(() => { isScannerLocked = false; }, 2000);
+      }
+    }
+
+    async function handleModalFileScan(event) {
+      const file = event.target.files?.[0];
+      if (!file) return;
+
+      try {
+        showScannerFeedback("info", "Processing File...", "Decoding QR code from uploaded image...");
+        if (!html5QrScanner) {
+          html5QrScanner = new Html5Qrcode("scanner-camera-view");
+        }
+        const decodedText = await html5QrScanner.scanFile(file, true);
+        await onQrCodeDetected(decodedText);
+      } catch (err) {
+        console.error("File scan failed:", err);
+        playScannerBeep('error');
+        showScannerFeedback("error", "No QR Code Found", "Could not locate a valid ROTC QR code in this image.");
+      } finally {
+        event.target.value = "";
+      }
+    }
+
+    async function handleModalManualScan() {
+      const input = document.getElementById("modal-manual-token-input");
+      const token = input?.value.trim();
+      if (!token) {
+        showPortalToast("Please enter a student ID or token.", "warning");
+        return;
+      }
+      await onQrCodeDetected(token);
+      if (input) input.value = "";
+    }
+
+    async function loadModalSessionScans() {
+      const sessId = document.getElementById("modal-scanner-session")?.value;
+      if (!sessId) {
+        modalScannedList = [];
+        renderModalStreamList();
+        return;
+      }
+
+      try {
+        const { data: records, error } = await window.supabaseClient
+          .from("attendance_records")
+          .select(`
+            id, cadet_id, status, scanned_at,
+            cadets(
+              id,
+              profiles(first_name, last_name, student_id, company, platoon)
+            )
+          `)
+          .eq("session_id", sessId)
+          .order("scanned_at", { ascending: false });
+
+        if (error) throw error;
+
+        modalScannedList = (records || []).map(r => {
+          const p = r.cadets?.profiles || {};
+          const d = r.scanned_at ? new Date(r.scanned_at) : new Date();
+          return {
+            cadet_id: r.cadet_id,
+            cadet_name: `${p.last_name || ''}, ${p.first_name || ''}`.replace(/^, /, '') || 'Unknown Cadet',
+            student_id: p.student_id || '—',
+            unit: `${p.company || ''} ${p.platoon || ''}`.trim() || 'Cadet',
+            time_in: d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
+            status: (r.status || 'PRESENT').toUpperCase()
+          };
+        });
+      } catch (e) {
+        console.error("Failed to load session scans:", e);
+        modalScannedList = [];
+      }
+
+      renderModalStreamList();
+    }
+
+    function renderModalStreamList(filteredList = null) {
+      const container = document.getElementById("modal-stream-list");
+      const counter = document.getElementById("modal-stream-counter");
+      if (!container) return;
+
+      const items = filteredList !== null ? filteredList : modalScannedList;
+
+      if (counter) {
+        counter.textContent = `${modalScannedList.length} Scanned`;
+      }
+
+      if (items.length === 0) {
+        container.innerHTML = `
+          <div style="text-align: center; padding: 3.5rem 1rem; color: #94a3b8; font-size: 0.84rem;">
+            <i class="fa-solid fa-qrcode" style="font-size: 2.2rem; color: #4ade80; opacity: 0.4; margin-bottom: 0.6rem; display: block;"></i>
+            <div style="color: #e2e8f0; font-weight: 600; margin-bottom: 0.25rem;">No cadets recorded yet for this session.</div>
+            New scans will appear here in real-time.
+          </div>
+        `;
+        return;
+      }
+
+      container.innerHTML = items.map(c => {
+        const initials = c.cadet_name.split(' ').map(w => w[0]).filter(Boolean).slice(0, 2).join('').toUpperCase() || 'CD';
+        return `
+          <div class="stream-cadet-card">
+            <div style="display: flex; align-items: center; gap: 0.75rem;">
+              <div class="stream-cadet-avatar">${initials}</div>
+              <div>
+                <div style="font-weight: 700; font-size: 0.88rem; color: #ffffff;">${c.cadet_name}</div>
+                <div style="font-size: 0.75rem; color: #94a3b8; margin-top: 0.1rem;">${c.student_id} • ${c.unit}</div>
+              </div>
+            </div>
+            <div style="text-align: right;">
+              <span style="display: inline-block; font-size: 0.68rem; font-weight: 800; padding: 0.18rem 0.55rem; border-radius: 4px; background: rgba(34, 197, 94, 0.2); color: #4ade80; border: 1px solid rgba(74, 222, 128, 0.4); text-transform: uppercase;">${c.status}</span>
+              <div style="font-size: 0.72rem; color: #cbd5e1; margin-top: 0.25rem; font-family: 'JetBrains Mono', monospace;">${c.time_in}</div>
+            </div>
+          </div>
+        `;
+      }).join('');
+    }
+
+    function filterModalStream() {
+      const q = (document.getElementById("modal-stream-search")?.value || '').toLowerCase().trim();
+      if (!q) {
+        renderModalStreamList();
+        return;
+      }
+      const filtered = modalScannedList.filter(c =>
+        c.cadet_name.toLowerCase().includes(q) ||
+        c.student_id.toLowerCase().includes(q) ||
+        c.unit.toLowerCase().includes(q)
+      );
+      renderModalStreamList(filtered);
+    }
+
+    // ── SCANNER ACCESS CONTROL HELPERS ──────────────────────────────────
+
+    // Highlight the selected radio option visually
+    function highlightScannerOption() {
+      const options = [
+        { radio: 'sess-scanner-type-all',     label: 'scanner-opt-all',     border: '#b88e2c', bg: 'rgba(184,142,44,0.07)' },
+        { radio: 'sess-scanner-type-officers', label: 'scanner-opt-officers', border: '#b88e2c', bg: 'rgba(184,142,44,0.07)' },
+        { radio: 'sess-scanner-type-cadets',  label: 'scanner-opt-cadets',  border: '#22c55e', bg: 'rgba(34,197,94,0.07)' },
+      ];
+      options.forEach(opt => {
+        const radio = document.getElementById(opt.radio);
+        const label = document.getElementById(opt.label);
+        if (!radio || !label) return;
+        if (radio.checked) {
+          label.style.border = `1.5px solid ${opt.border}`;
+          label.style.background = opt.bg;
+        } else {
+          label.style.border = '1.5px solid transparent';
+          label.style.background = '';
+        }
+      });
+    }
+
+    // Check if a cadet profile is an active officer by querying Supabase
+    async function checkIsOfficer(profileId) {
+      try {
+        const { data, error } = await window.supabaseClient
+          .from('officer_classifications')
+          .select('id')
+          .eq('profile_id', profileId)
+          .eq('is_active', true)
+          .limit(1)
+          .maybeSingle();
+        return !error && data !== null;
+      } catch (e) {
+        console.warn('Officer check error:', e);
+        return false;
+      }
+    }
+
+    // Retrieve allowed_scanner_type for a given session ID
+    // Falls back to 'all' if the column doesn't exist yet (safe migration)
+    async function getSessionScannerType(sessionId) {
+      try {
+        const session = allSessions.find(s => s.id === sessionId);
+        if (session && session.allowed_scanner_type) {
+          return session.allowed_scanner_type;
+        }
+        // Fallback: query DB directly
+        const { data } = await window.supabaseClient
+          .from('attendance_sessions')
+          .select('allowed_scanner_type')
+          .eq('id', sessionId)
+          .maybeSingle();
+        return data?.allowed_scanner_type || 'all';
+      } catch (e) {
+        return 'all'; // Safe default if column not yet added
+      }
+    }
+
+    // Update permission badge display in live scanner header
+    function updateScannerPermissionBadge(sessionId) {
+      const badge = document.getElementById('scanner-permission-badge');
+      if (!badge) return;
+      if (!sessionId) { badge.style.display = 'none'; return; }
+      const session = (allSessions || []).find(s => s.id === sessionId);
+      const type = session?.allowed_scanner_type || 'all';
+      const labels = {
+        all: '🌐 All Can Scan',
+        officers_only: '🎖️ Officers Only',
+        cadets_only: '👤 Cadets Only'
+      };
+      const colors = {
+        all: { bg: 'rgba(34,197,94,0.2)', color: '#4ade80', border: 'rgba(74,222,128,0.3)' },
+        officers_only: { bg: 'rgba(184,142,44,0.25)', color: '#fbbf24', border: 'rgba(251,191,36,0.4)' },
+        cadets_only: { bg: 'rgba(59,130,246,0.2)', color: '#93c5fd', border: 'rgba(147,197,253,0.3)' }
+      };
+      const c = colors[type] || colors.all;
+      badge.textContent = labels[type] || '🌐 All Can Scan';
+      badge.style.background = c.bg;
+      badge.style.color = c.color;
+      badge.style.border = '1px solid ' + c.border;
+      badge.style.display = 'inline-block';
+    }
+
+    // Show a scanner permission denial banner
+    function showScannerDenied(cadetName, reason) {
+      playScannerBeep('error');
+      if (navigator.vibrate) navigator.vibrate([300, 100, 300]);
+      showScannerFeedback(
+        'error',
+        `🚫 Access Denied — ${cadetName}`,
+        reason
+      );
+      showPortalToast(`Access denied: ${reason}`, 'warning');
+    }
+    // Auto-open scanner modal if ?openScanner=1 or ?scanner=1 is in URL
+    document.addEventListener("DOMContentLoaded", () => {
+      const urlParams = new URLSearchParams(window.location.search);
+      if (urlParams.get("openScanner") === "1" || urlParams.get("scanner") === "1") {
+        setTimeout(openLiveQrScannerModal, 500);
+      }
+    });
+
+  </script>
+</body>
+</html>

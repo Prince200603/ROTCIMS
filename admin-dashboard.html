@@ -1,0 +1,1132 @@
+<!--
+  ============================================================
+  FILE: admin-dashboard.html
+  PURPOSE: Central command overview dashboard for the ROTCIMS
+           admin portal. Displays real-time metrics (total
+           cadets, personnel, attendance sessions, pending
+           applications) and shows the 8 most recent
+           attendance log entries.
+  FEATURES:
+    • Ultra-Clean Minimalist Glass UI with Clean Light / Dark Mode Toggle
+    • Interactive Metric Tiles with direct route links
+    • Frosted Command Quick Action Tiles
+    • Sticky Responsive Table Header for Recent Attendance Logs
+    • Shimmer Skeleton Loaders preventing layout shifts
+    • Real-Time Operational Clock
+
+  ACCESS: Restricted to 'admin', 'personnel', or 'platoon_leader'.
+  ============================================================
+-->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Command Dashboard — ROTCIMS</title>
+  
+  <!-- Main portal stylesheets -->
+  <link rel="stylesheet" href="css/style.css">
+  <link rel="stylesheet" href="css/portal.css">
+  <link rel="stylesheet" href="css/responsive.css">
+  
+  <!-- Font Awesome 6 Pro Icons -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+  
+  <!-- Theme Persistence Initialization (Immediate to prevent flash) -->
+  <script src="js/theme.js"></script>
+  
+  <!-- Supabase client library & Auth Guard -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="js/config.js"></script>
+  <script src="js/auth.js"></script>
+  <script src="js/rbac.js"></script>
+  <script src="js/user-menu.js"></script>
+</head>
+<body>
+
+  <!-- ====== PORTAL LAYOUT WRAPPER ====== -->
+  <div class="portal-layout">
+
+    <!-- ====== COMMAND SIDEBAR NAVIGATION ====== -->
+            <aside class="sidebar">
+      <div class="sidebar-header">
+        <div class="brand">
+          <img src="assets/logo.png" alt="Logo" onerror="this.src='assets/icon.png'">
+          <div class="brand-text">ROTCIMS <span>Command Staff</span></div>
+        </div>
+      </div>
+      <nav class="sidebar-nav">
+        <div class="nav-group-title">Overview</div>
+        <ul class="sidebar-menu">
+          <li><a href="admin-dashboard.html" class="active"><i class="fa-solid fa-chart-pie"></i> Dashboard</a></li>
+        </ul>
+        <div class="nav-group-title">Drill &amp; Attendance</div>
+        <ul class="sidebar-menu">
+          <li><a href="admin-attendance.html"><i class="fa-solid fa-clipboard-check"></i> Attendance</a></li>
+          <li><a href="admin-reports.html"><i class="fa-solid fa-file-invoice"></i> Attendance Reports</a></li>
+        </ul>
+        <div class="nav-group-title">Cadets &amp; Admissions</div>
+        <ul class="sidebar-menu">
+          <li><a href="admin-cadets.html"><i class="fa-solid fa-users-viewfinder"></i> Cadet Directory</a></li>
+        </ul>
+        <div class="nav-group-title">Content &amp; Academics</div>
+        <ul class="sidebar-menu">
+          <li><a href="admin-posting.html"><i class="fa-solid fa-pen-to-square"></i> Posting Center</a></li>
+          <li><a href="admin-documents.html"><i class="fa-solid fa-book-bookmark"></i> Modules &amp; Documents</a></li>
+        </ul>
+        <div class="nav-group-title">Personnel &amp; Governance</div>
+        <ul class="sidebar-menu">
+          <li><a href="admin-accounts.html"><i class="fa-solid fa-users-gear"></i> Personnel &amp; Roles</a></li>
+          <li><a href="admin-settings.html"><i class="fa-solid fa-sliders"></i> Settings &amp; Storage</a></li>
+        </ul>
+      </nav>
+    </aside>
+
+    <!-- ====== MAIN COMMAND CONTENT ====== -->
+    <main class="main-content">
+
+      <!-- ====== COMMAND TOP BAR (FROSTED GLASS) ====== -->
+      <header class="top-bar">
+        <div style="display: flex; align-items: center; gap: 0.85rem;">
+          <button class="mobile-menu-btn" onclick="toggleMobileMenu()" aria-label="Toggle Navigation Menu">
+            <i class="fa-solid fa-bars"></i>
+          </button>
+          <div class="page-title">
+            <h1>Command Overview &amp; Operations</h1>
+            <p>San Enrique ROTC Unit Management System</p>
+          </div>
+        </div>
+
+        <div style="display: flex; align-items: center; gap: 0.85rem;">
+          <!-- Online Cadets Oval Pill -->
+          <div class="d-none-mobile" style="display: flex; align-items: center; gap: 0.5rem; font-size: 0.82rem; font-weight: 700; padding: 0.38rem 0.85rem; border-radius: 9999px; background: rgba(34, 197, 94, 0.12); border: 1px solid rgba(34, 197, 94, 0.35); color: #22c55e;" title="Active cadets currently connected/active on ROTCIMS">
+            <span class="status-pulse-dot" style="background-color: #22c55e; box-shadow: 0 0 8px #22c55e; display: inline-block;"></span>
+            <span><strong id="top-online-cadets-count">1</strong> Online Cadets</span>
+          </div>
+
+          <!-- User identity badge -->
+          <div class="user-badge">
+            <div class="avatar-wrap" style="position: relative;">
+              <div class="avatar" id="user-avatar">AD</div>
+              <span class="avatar-status-dot" style="position: absolute; bottom: 0; right: 0; width: 11px; height: 11px; background-color: #22c55e; border: 2px solid var(--portal-card-bg); border-radius: 50%;" title="Authenticated Session"></span>
+            </div>
+            <div class="user-info d-none-mobile">
+              <div class="name" id="user-name">Loading...</div>
+              <div class="role-tag" id="user-role">Administrator</div>
+            </div>
+          </div>
+        </div>
+      </header>
+
+      <!-- ====== CONTENT BODY ====== -->
+      <div class="content-body">
+
+        <!-- ====== MOBILE SPEC VIEW ====== -->
+        <div class="d-none-desktop">
+          <!-- 1. Mobile Greeting Hero -->
+          <div class="card" style="padding: 1.25rem; margin-bottom: 1rem; background: linear-gradient(135deg, rgba(21, 56, 37, 0.15) 0%, rgba(184, 142, 44, 0.12) 100%);">
+            <div style="display: flex; align-items: center; justify-content: space-between;">
+              <div style="display: flex; align-items: center; gap: 0.75rem;">
+                <img src="assets/logo.png" alt="Unit Crest" width="44" height="44" style="border-radius: 50%; border: 2px solid var(--portal-brass);" onerror="this.src='assets/icon.png'">
+                <div>
+                  <div style="font-weight: 700; font-size: 1rem; color: var(--portal-ink);" id="mob-hero-greeting">Good day, Officer</div>
+                  <div style="font-size: 0.75rem; color: var(--portal-muted);">Together for a disciplined tomorrow.</div>
+                </div>
+              </div>
+              <button onclick="window.location.href='admin-posting.html'" style="background: var(--portal-card-bg); border: 1px solid var(--portal-border); width: 38px; height: 38px; border-radius: 50%; display: grid; place-items: center; color: var(--portal-brass); cursor: pointer;" title="Directives">
+                <i class="fa-solid fa-bell"></i>
+              </button>
+            </div>
+          </div>
+
+          <!-- 2. Today's Formation Session Card -->
+          <div class="card" style="padding: 1.25rem; margin-bottom: 1rem;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
+              <div style="font-weight: 700; font-size: 0.95rem; color: var(--portal-ink); display: flex; align-items: center; gap: 0.4rem;">
+                <i class="fa-solid fa-calendar-day" style="color: var(--portal-brass);"></i>
+                <span id="mob-dash-session-title">Formation Session</span>
+              </div>
+              <span id="mob-dash-session-badge" class="badge badge-present">Ongoing</span>
+            </div>
+            <div style="font-size: 0.75rem; color: var(--portal-muted); margin-bottom: 1rem;" id="mob-dash-session-time">
+              Today • 6:00 AM – 7:00 AM
+            </div>
+            <div style="display: grid; grid-template-columns: repeat(5, 1fr); gap: 0.4rem; text-align: center;">
+              <div onclick="window.location.href='admin-attendance.html'" style="cursor:pointer; padding: 0.5rem 0.2rem; border-radius: 8px; background: var(--portal-border-subtle);">
+                <div style="font-size: 0.85rem; color: var(--portal-brass);"><i class="fa-solid fa-users"></i></div>
+                <div style="font-weight: 800; font-family: 'Oswald', sans-serif; font-size: 1.1rem; color: var(--portal-ink);" id="mob-dash-total">0</div>
+                <div style="font-size: 0.65rem; color: var(--portal-muted); text-transform: uppercase;">Total</div>
+              </div>
+              <div onclick="window.location.href='admin-attendance.html'" style="cursor:pointer; padding: 0.5rem 0.2rem; border-radius: 8px; background: var(--portal-success-bg);">
+                <div style="font-size: 0.85rem; color: var(--portal-success);"><i class="fa-solid fa-check"></i></div>
+                <div style="font-weight: 800; font-family: 'Oswald', sans-serif; font-size: 1.1rem; color: var(--portal-success);" id="mob-dash-present">0</div>
+                <div style="font-size: 0.65rem; color: var(--portal-muted); text-transform: uppercase;">Present</div>
+              </div>
+              <div onclick="window.location.href='admin-attendance.html'" style="cursor:pointer; padding: 0.5rem 0.2rem; border-radius: 8px; background: var(--portal-warning-bg);">
+                <div style="font-size: 0.85rem; color: var(--portal-warning);"><i class="fa-solid fa-clock"></i></div>
+                <div style="font-weight: 800; font-family: 'Oswald', sans-serif; font-size: 1.1rem; color: var(--portal-warning);" id="mob-dash-late">0</div>
+                <div style="font-size: 0.65rem; color: var(--portal-muted); text-transform: uppercase;">Late</div>
+              </div>
+              <div onclick="window.location.href='admin-attendance.html'" style="cursor:pointer; padding: 0.5rem 0.2rem; border-radius: 8px; background: var(--portal-danger-bg);">
+                <div style="font-size: 0.85rem; color: var(--portal-danger);"><i class="fa-solid fa-xmark"></i></div>
+                <div style="font-weight: 800; font-family: 'Oswald', sans-serif; font-size: 1.1rem; color: var(--portal-danger);" id="mob-dash-absent">0</div>
+                <div style="font-size: 0.65rem; color: var(--portal-muted); text-transform: uppercase;">Absent</div>
+              </div>
+              <div onclick="window.location.href='admin-attendance.html'" style="cursor:pointer; padding: 0.5rem 0.2rem; border-radius: 8px; background: var(--portal-info-bg);">
+                <div style="font-size: 0.85rem; color: var(--portal-info);"><i class="fa-solid fa-user"></i></div>
+                <div style="font-weight: 800; font-family: 'Oswald', sans-serif; font-size: 1.1rem; color: var(--portal-info);" id="mob-dash-excused">0</div>
+                <div style="font-size: 0.65rem; color: var(--portal-muted); text-transform: uppercase;">Excused</div>
+              </div>
+            </div>
+          </div>
+
+          <!-- 3. Mobile Recent Activity Header and Cards -->
+          <div style="display:flex; align-items:center; justify-content:space-between; margin:1.25rem 0 0.65rem; padding:0 0.25rem;">
+            <div style="font-family:'Oswald',sans-serif; font-size:1.05rem; font-weight:700; color:var(--portal-ink);">
+              Recent Activity
+            </div>
+            <a href="admin-attendance.html" style="color:var(--portal-brass); font-size:0.82rem; font-weight:700; text-decoration:none;">
+              View All ➔
+            </a>
+          </div>
+          <div id="mob-dash-recent-cards">
+            <div style="text-align:center; padding:1.5rem; color:var(--portal-muted); font-size:0.85rem;">Loading activity...</div>
+          </div>
+        </div><!-- end .d-none-desktop -->
+
+        <!-- ====== DESKTOP OVERVIEW (TACTICAL COMMAND INTELLIGENCE & STATISTICS) ====== -->
+        <div class="d-none-mobile">
+          
+          <!-- ====== COMMAND BANNER & BATTALION READINESS ====== -->
+          <div style="background: radial-gradient(ellipse at top left, rgba(21, 56, 37, 0.85) 0%, rgba(12, 22, 14, 0.95) 100%); border: 1px solid rgba(184, 142, 44, 0.45); border-radius: 14px; padding: 1.35rem 1.75rem; margin-bottom: 1.5rem; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 1rem; box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35);">
+            <div>
+              <div style="display: flex; align-items: center; gap: 0.65rem; margin-bottom: 0.4rem; flex-wrap: wrap;">
+                <span class="session-status-pill pill-open">
+                  <span class="status-pulse-dot"></span> BATTALION READY
+                </span>
+                <span style="display: inline-flex; align-items: center; gap: 0.45rem; font-size: 0.75rem; font-weight: 700; padding: 0.22rem 0.75rem; border-radius: 9999px; background: rgba(34, 197, 94, 0.16); border: 1px solid rgba(74, 222, 128, 0.4); color: #86efac;">
+                  <span class="status-pulse-dot" style="background:#4ade80;"></span>
+                  <span id="banner-online-cadets">1 Cadets Online Now</span>
+                </span>
+                <span style="font-size: 0.78rem; color: #fbbf24; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em;">
+                  ROTCIMS Command Hub • S.Y. 2026–2027
+                </span>
+              </div>
+              <h2 style="font-family: 'Oswald', sans-serif; font-size: 1.6rem; color: #ffffff; margin: 0; letter-spacing: 0.03em;">
+                Headquarters Operations &amp; Intelligence Dashboard
+              </h2>
+              <p style="font-size: 0.84rem; color: #94a3b8; margin: 0.25rem 0 0;">
+                604th (ILO) CDC, 6RCDG, RESCOM, PA • Iloilo State University of Fisheries Science and Technology
+              </p>
+            </div>
+            <div style="display: flex; gap: 0.65rem; align-items: center; flex-wrap: wrap;">
+              <button onclick="window.location.href='admin-attendance.html?openScanner=1'" class="btn btn-scanner-cta" style="padding: 0.65rem 1.15rem; font-size: 0.88rem; font-weight: 700;">
+                <i class="fa-solid fa-qrcode" style="color: #4ade80; margin-right: 0.35rem;"></i> Launch QR Scanner
+              </button>
+              <button onclick="window.location.href='admin-reports.html?action=excel'" class="btn btn-outline" style="border-color: rgba(34,197,94,0.5); color: #86efac; background: rgba(0,0,0,0.3); padding: 0.65rem 1.1rem; font-size: 0.88rem;">
+                <i class="fa-solid fa-file-excel" style="color: #22c55e; margin-right: 0.35rem;"></i> Export Excel / Reports
+              </button>
+            </div>
+          </div>
+
+          <!-- ====== 1. PRIMARY METRIC CARDS 6-GRID ====== -->
+          <section aria-label="Key Command Metrics">
+            <div style="display: grid; grid-template-columns: repeat(6, 1fr); gap: 0.9rem; margin-bottom: 1.5rem;">
+
+              <div class="metric-card" onclick="window.location.href='admin-cadets.html'" style="cursor:pointer;" title="Cadet Directory">
+                <div class="metric-icon" style="color:#22c55e; background:rgba(34,197,94,0.12);">
+                  <i class="fa-solid fa-users-viewfinder"></i>
+                </div>
+                <div class="metric-data">
+                  <div class="label">Total Cadets</div>
+                  <div class="value" id="count-cadets">0</div>
+                  <div style="font-size:0.7rem;color:var(--portal-muted);margin-top:0.2rem;">Battalion Strength</div>
+                </div>
+              </div>
+
+              <div class="metric-card" onclick="window.location.href='admin-accounts.html'" style="cursor:pointer;" title="Officers & Personnel">
+                <div class="metric-icon" style="color:#3b82f6; background:rgba(59,130,246,0.12);">
+                  <i class="fa-solid fa-user-shield"></i>
+                </div>
+                <div class="metric-data">
+                  <div class="label">Officers &amp; Staff</div>
+                  <div class="value" id="count-personnel">0</div>
+                  <div style="font-size:0.7rem;color:var(--portal-muted);margin-top:0.2rem;">Command Personnel</div>
+                </div>
+              </div>
+
+              <div class="metric-card" onclick="window.location.href='admin-attendance.html'" style="cursor:pointer;" title="Formation Sessions">
+                <div class="metric-icon" style="color:#b88e2c; background:rgba(184,142,44,0.12);">
+                  <i class="fa-solid fa-calendar-check"></i>
+                </div>
+                <div class="metric-data">
+                  <div class="label">Formations Held</div>
+                  <div class="value" id="count-sessions">0</div>
+                  <div style="font-size:0.7rem;color:var(--portal-muted);margin-top:0.2rem;">Drill Sessions</div>
+                </div>
+              </div>
+
+              <div class="metric-card" onclick="window.location.href='admin-reports.html'" style="cursor:pointer;" title="Turnout Rate">
+                <div class="metric-icon" style="color:#10b981; background:rgba(16,185,129,0.12);">
+                  <i class="fa-solid fa-chart-line"></i>
+                </div>
+                <div class="metric-data">
+                  <div class="label">Avg Turnout</div>
+                  <div class="value" id="count-turnout-rate">0%</div>
+                  <div style="font-size:0.7rem;color:#4ade80;margin-top:0.2rem;">All-time Rate</div>
+                </div>
+              </div>
+
+              <div class="metric-card" onclick="window.location.href='admin-attendance.html'" style="cursor:pointer;" title="Present Today">
+                <div class="metric-icon" style="color:#06b6d4; background:rgba(6,182,212,0.12);">
+                  <i class="fa-solid fa-circle-check"></i>
+                </div>
+                <div class="metric-data">
+                  <div class="label">Present Today</div>
+                  <div class="value" id="count-present-today">0</div>
+                  <div style="font-size:0.7rem;color:#67e8f9;margin-top:0.2rem;">Latest Session</div>
+                </div>
+              </div>
+
+              <div class="metric-card" onclick="window.location.href='admin-cadets.html'" style="cursor:pointer;" title="Pending Verification">
+                <div class="metric-icon" style="color:#f59e0b; background:rgba(245,158,11,0.12);">
+                  <i class="fa-solid fa-user-clock"></i>
+                </div>
+                <div class="metric-data">
+                  <div class="label">Pending</div>
+                  <div class="value" id="count-pending">0</div>
+                  <div style="font-size:0.7rem;color:var(--portal-warning);margin-top:0.2rem;">Awaiting Approval</div>
+                </div>
+              </div>
+
+            </div>
+          </section>
+
+          <!-- ====== 2. FORMATION OPERATIONS & MUSTER DISTRIBUTION (ROW 1: 3-COLUMN BALANCED) ====== -->
+          <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap:1rem; align-items:stretch; margin-bottom:1rem;">
+
+            <!-- COL 1: BATTALION MUSTER DISTRIBUTION (COMPANY STRENGTH) -->
+            <div class="card" style="padding:1.15rem 1.25rem; display:flex; flex-direction:column; justify-content:space-between; margin-bottom:0;">
+              <div>
+                <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:0.85rem; border-bottom:1px solid var(--portal-border); padding-bottom:0.6rem;">
+                  <div style="display:flex;align-items:center;gap:0.45rem;">
+                    <div style="width:28px;height:28px;border-radius:7px;background:rgba(184,142,44,0.15);color:var(--portal-brass);display:flex;align-items:center;justify-content:center;font-size:0.88rem;">
+                      <i class="fa-solid fa-shield-halved"></i>
+                    </div>
+                    <div>
+                      <div style="font-family:'Oswald',sans-serif;font-size:1rem;color:var(--portal-ink);font-weight:700;letter-spacing:0.03em;">Company Strength</div>
+                      <div style="font-size:0.7rem;color:var(--portal-muted);">Battalion muster distribution</div>
+                    </div>
+                  </div>
+                  <span id="company-total-pill" style="font-size:0.7rem;font-weight:700;background:var(--portal-border-subtle);padding:0.18rem 0.55rem;border-radius:10px;color:var(--portal-muted);">0 Total</span>
+                </div>
+                <div style="display:flex;flex-direction:column;gap:0.65rem;" id="company-breakdown-list">
+                  <div>
+                    <div style="display:flex;justify-content:space-between;font-size:0.78rem;font-weight:700;margin-bottom:0.25rem;color:var(--portal-ink);">
+                      <span><i class="fa-solid fa-flag" style="color:#22c55e;margin-right:0.3rem;"></i>Alpha Company</span>
+                      <span id="co-alpha-stat">0 (0%)</span>
+                    </div>
+                    <div style="width:100%;height:6px;background:var(--portal-border-subtle);border-radius:3px;overflow:hidden;">
+                      <div id="co-alpha-bar" style="height:100%;width:0%;background:linear-gradient(90deg,#15803d,#22c55e);border-radius:3px;transition:width 0.9s ease;"></div>
+                    </div>
+                  </div>
+                  <div>
+                    <div style="display:flex;justify-content:space-between;font-size:0.78rem;font-weight:700;margin-bottom:0.25rem;color:var(--portal-ink);">
+                      <span><i class="fa-solid fa-flag" style="color:#3b82f6;margin-right:0.3rem;"></i>Bravo Company</span>
+                      <span id="co-bravo-stat">0 (0%)</span>
+                    </div>
+                    <div style="width:100%;height:6px;background:var(--portal-border-subtle);border-radius:3px;overflow:hidden;">
+                      <div id="co-bravo-bar" style="height:100%;width:0%;background:linear-gradient(90deg,#1d4ed8,#3b82f6);border-radius:3px;transition:width 0.9s ease;"></div>
+                    </div>
+                  </div>
+                  <div>
+                    <div style="display:flex;justify-content:space-between;font-size:0.78rem;font-weight:700;margin-bottom:0.25rem;color:var(--portal-ink);">
+                      <span><i class="fa-solid fa-flag" style="color:#f59e0b;margin-right:0.3rem;"></i>Charlie Company</span>
+                      <span id="co-charlie-stat">0 (0%)</span>
+                    </div>
+                    <div style="width:100%;height:6px;background:var(--portal-border-subtle);border-radius:3px;overflow:hidden;">
+                      <div id="co-charlie-bar" style="height:100%;width:0%;background:linear-gradient(90deg,#b45309,#f59e0b);border-radius:3px;transition:width 0.9s ease;"></div>
+                    </div>
+                  </div>
+                  <div>
+                    <div style="display:flex;justify-content:space-between;font-size:0.78rem;font-weight:700;margin-bottom:0.25rem;color:var(--portal-ink);">
+                      <span><i class="fa-solid fa-flag" style="color:#8b5cf6;margin-right:0.3rem;"></i>Delta Company</span>
+                      <span id="co-delta-stat">0 (0%)</span>
+                    </div>
+                    <div style="width:100%;height:6px;background:var(--portal-border-subtle);border-radius:3px;overflow:hidden;">
+                      <div id="co-delta-bar" style="height:100%;width:0%;background:linear-gradient(90deg,#6d28d9,#8b5cf6);border-radius:3px;transition:width 0.9s ease;"></div>
+                    </div>
+                  </div>
+                  <div>
+                    <div style="display:flex;justify-content:space-between;font-size:0.78rem;font-weight:700;margin-bottom:0.25rem;color:var(--portal-ink);">
+                      <span><i class="fa-solid fa-kit-medical" style="color:#ec4899;margin-right:0.3rem;"></i>Medics Unit</span>
+                      <span id="co-medics-stat">0 (0%)</span>
+                    </div>
+                    <div style="width:100%;height:6px;background:var(--portal-border-subtle);border-radius:3px;overflow:hidden;">
+                      <div id="co-medics-bar" style="height:100%;width:0%;background:linear-gradient(90deg,#be185d,#ec4899);border-radius:3px;transition:width 0.9s ease;"></div>
+                    </div>
+                  </div>
+                  <div>
+                    <div style="display:flex;justify-content:space-between;font-size:0.78rem;font-weight:700;margin-bottom:0.25rem;color:var(--portal-ink);">
+                      <span><i class="fa-solid fa-star" style="color:#eab308;margin-right:0.3rem;"></i>GHQ &amp; Staff</span>
+                      <span id="co-ghq-stat">0 (0%)</span>
+                    </div>
+                    <div style="width:100%;height:6px;background:var(--portal-border-subtle);border-radius:3px;overflow:hidden;">
+                      <div id="co-ghq-bar" style="height:100%;width:0%;background:linear-gradient(90deg,#a16207,#eab308);border-radius:3px;transition:width 0.9s ease;"></div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- COL 2: ATTENDANCE TRAJECTORY + DONUT BREAKDOWN -->
+            <div style="display:flex; flex-direction:column; gap:1rem;">
+              <!-- Trajectory chart -->
+              <div class="card" style="padding:1.15rem 1.25rem; margin-bottom:0;">
+                <div style="display:flex;align-items:center;gap:0.45rem;margin-bottom:0.65rem;border-bottom:1px solid var(--portal-border);padding-bottom:0.55rem;">
+                  <div style="width:28px;height:28px;border-radius:7px;background:rgba(34,197,94,0.15);color:#22c55e;display:flex;align-items:center;justify-content:center;font-size:0.88rem;">
+                    <i class="fa-solid fa-chart-column"></i>
+                  </div>
+                  <div>
+                    <div style="font-family:'Oswald',sans-serif;font-size:1rem;color:var(--portal-ink);font-weight:700;">Turnout Trajectory</div>
+                    <div style="font-size:0.7rem;color:var(--portal-muted);">Turnout across past drill formations</div>
+                  </div>
+                </div>
+                <div id="trajectory-chart-container" style="display:flex;align-items:flex-end;gap:0.6rem;height:100px;padding-top:0.4rem;border-bottom:1px solid var(--portal-border);margin-bottom:0.55rem;">
+                  <div style="flex:1;text-align:center;color:var(--portal-muted);font-size:0.8rem;align-self:center;">
+                    <i class="fa-solid fa-spinner fa-spin"></i> Calculating...
+                  </div>
+                </div>
+                <div style="display:flex;justify-content:space-between;font-size:0.7rem;color:var(--portal-muted);">
+                  <span><i class="fa-solid fa-circle" style="color:#22c55e;font-size:0.55rem;"></i> High (&gt;80%)</span>
+                  <span><i class="fa-solid fa-circle" style="color:#f59e0b;font-size:0.55rem;"></i> Mid (60-80%)</span>
+                  <span><i class="fa-solid fa-circle" style="color:#ef4444;font-size:0.55rem;"></i> Low (&lt;60%)</span>
+                </div>
+              </div>
+
+              <!-- Attendance Donut Ring -->
+              <div class="card" style="padding:1.15rem 1.25rem; margin-bottom:0;">
+                <div style="font-family:'Oswald',sans-serif;font-size:0.98rem;color:var(--portal-ink);font-weight:700;margin-bottom:0.7rem;display:flex;align-items:center;gap:0.4rem;">
+                  <i class="fa-solid fa-circle-half-stroke" style="color:#b88e2c;"></i> Overall Attendance Breakdown
+                </div>
+                <div style="display:flex;align-items:center;gap:0.85rem;">
+                  <!-- SVG donut -->
+                  <div style="position:relative;width:84px;height:84px;flex-shrink:0;">
+                    <svg viewBox="0 0 36 36" style="width:84px;height:84px;transform:rotate(-90deg);">
+                      <circle cx="18" cy="18" r="15.9" fill="none" stroke="var(--portal-border-subtle)" stroke-width="3.6"/>
+                      <circle id="donut-present" cx="18" cy="18" r="15.9" fill="none" stroke="#22c55e" stroke-width="3.6" stroke-dasharray="0 100" stroke-linecap="round" style="transition:stroke-dasharray 1s ease;"/>
+                      <circle id="donut-late" cx="18" cy="18" r="15.9" fill="none" stroke="#f59e0b" stroke-width="3.6" stroke-dasharray="0 100" stroke-linecap="round" style="transition:stroke-dasharray 1s ease;"/>
+                      <circle id="donut-absent" cx="18" cy="18" r="15.9" fill="none" stroke="#ef4444" stroke-width="3.6" stroke-dasharray="0 100" stroke-linecap="round" style="transition:stroke-dasharray 1s ease;"/>
+                    </svg>
+                    <div style="position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;">
+                      <div id="donut-center-pct" style="font-size:1.05rem;font-weight:800;color:var(--portal-ink);line-height:1;">0%</div>
+                      <div style="font-size:0.52rem;color:var(--portal-muted);text-transform:uppercase;letter-spacing:0.04em;">Turnout</div>
+                    </div>
+                  </div>
+                  <!-- Legend -->
+                  <div style="display:flex;flex-direction:column;gap:0.35rem;flex:1;">
+                    <div style="display:flex;justify-content:space-between;font-size:0.75rem;">
+                      <span><i class="fa-solid fa-circle" style="color:#22c55e;font-size:0.55rem;margin-right:0.3rem;"></i>Present</span>
+                      <span id="donut-present-count" style="font-weight:700;color:var(--portal-ink);">0</span>
+                    </div>
+                    <div style="display:flex;justify-content:space-between;font-size:0.75rem;">
+                      <span><i class="fa-solid fa-circle" style="color:#f59e0b;font-size:0.55rem;margin-right:0.3rem;"></i>Late</span>
+                      <span id="donut-late-count" style="font-weight:700;color:var(--portal-ink);">0</span>
+                    </div>
+                    <div style="display:flex;justify-content:space-between;font-size:0.75rem;">
+                      <span><i class="fa-solid fa-circle" style="color:#ef4444;font-size:0.55rem;margin-right:0.3rem;"></i>Absent</span>
+                      <span id="donut-absent-count" style="font-weight:700;color:var(--portal-ink);">0</span>
+                    </div>
+                    <div style="display:flex;justify-content:space-between;font-size:0.75rem;">
+                      <span><i class="fa-solid fa-circle" style="color:#94a3b8;font-size:0.55rem;margin-right:0.3rem;"></i>Excused</span>
+                      <span id="donut-excused-count" style="font-weight:700;color:var(--portal-ink);">0</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- COL 3: ACTIVE FORMATION RADAR + QUICK OPERATIONS -->
+            <div style="display:flex; flex-direction:column; gap:1rem;">
+              <!-- Active Formation Radar -->
+              <div class="card" style="padding:1.15rem 1.25rem;border-left:3px solid #22c55e; margin-bottom:0;">
+                <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:0.5rem;">
+                  <span class="session-status-pill pill-open" id="dash-active-pill" style="font-size:0.7rem;padding:0.18rem 0.55rem;">
+                    <span class="status-pulse-dot"></span> LIVE
+                  </span>
+                  <span id="dash-active-time" style="font-size:0.7rem;font-family:monospace;color:var(--portal-muted);">--:-- AM - --:-- PM</span>
+                </div>
+                <h4 id="dash-active-title" style="font-family:'Oswald',sans-serif;font-size:1.05rem;color:var(--portal-ink);margin:0 0 0.2rem;line-height:1.2;">
+                  No Active Session
+                </h4>
+                <div id="dash-active-location" style="font-size:0.74rem;color:var(--portal-muted);margin-bottom:0.65rem;">
+                  <i class="fa-solid fa-location-dot" style="color:var(--portal-brass);margin-right:0.25rem;"></i> Grandstand Parade Grounds
+                </div>
+                <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:0.35rem;background:var(--portal-border-subtle);padding:0.55rem;border-radius:7px;text-align:center;margin-bottom:0.65rem;">
+                  <div>
+                    <div style="font-size:0.6rem;color:var(--portal-muted);text-transform:uppercase;">Marked</div>
+                    <div style="font-size:0.95rem;font-weight:800;color:var(--portal-ink);" id="dash-sess-marked">0</div>
+                  </div>
+                  <div>
+                    <div style="font-size:0.6rem;color:var(--portal-muted);text-transform:uppercase;">Present</div>
+                    <div style="font-size:0.95rem;font-weight:800;color:#22c55e;" id="dash-sess-present">0</div>
+                  </div>
+                  <div>
+                    <div style="font-size:0.6rem;color:var(--portal-muted);text-transform:uppercase;">Late</div>
+                    <div style="font-size:0.95rem;font-weight:800;color:#f59e0b;" id="dash-sess-late">0</div>
+                  </div>
+                </div>
+                <button onclick="window.location.href='admin-attendance.html?openScanner=1'" class="btn btn-primary" style="width:100%;font-size:0.78rem;padding:0.42rem;">
+                  <i class="fa-solid fa-qrcode"></i> Launch QR Scanner
+                </button>
+              </div>
+
+              <!-- Quick Operations -->
+              <div class="card" style="padding:1.15rem 1.25rem; margin-bottom:0;">
+                <div style="font-weight:700;font-size:0.86rem;color:var(--portal-ink);margin-bottom:0.65rem;display:flex;align-items:center;gap:0.35rem;">
+                  <i class="fa-solid fa-bolt" style="color:var(--portal-brass);"></i> Quick Operations
+                </div>
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:0.4rem;">
+                  <a href="admin-posting.html" class="btn btn-outline" style="font-size:0.74rem;padding:0.45rem 0.55rem;justify-content:flex-start;">
+                    <i class="fa-solid fa-bullhorn" style="color:var(--portal-brass);"></i> Notice
+                  </a>
+                  <a href="admin-documents.html" class="btn btn-outline" style="font-size:0.74rem;padding:0.45rem 0.55rem;justify-content:flex-start;">
+                    <i class="fa-solid fa-folder-open" style="color:#3b82f6;"></i> Docs
+                  </a>
+                  <a href="admin-cadets.html" class="btn btn-outline" style="font-size:0.74rem;padding:0.45rem 0.55rem;justify-content:flex-start;">
+                    <i class="fa-solid fa-users" style="color:#22c55e;"></i> Cadets
+                  </a>
+                  <a href="admin-reports.html?action=excel" class="btn btn-outline" style="font-size:0.74rem;padding:0.45rem 0.55rem;justify-content:flex-start;">
+                    <i class="fa-solid fa-file-excel" style="color:#16a34a;"></i> Excel
+                  </a>
+                  <a href="admin-accounts.html" class="btn btn-outline" style="font-size:0.74rem;padding:0.45rem 0.55rem;justify-content:flex-start;grid-column:span 2;">
+                    <i class="fa-solid fa-user-shield" style="color:#8b5cf6;"></i> Personnel &amp; Roles
+                  </a>
+                </div>
+              </div>
+            </div>
+
+          </div>
+
+          <!-- ====== 3. DEMOGRAPHICS, TOP PERFORMERS & SYSTEM HEALTH (ROW 2: 3-COLUMN BALANCED) ====== -->
+          <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap:1rem; align-items:stretch; margin-bottom:1rem;">
+
+            <!-- COL 1: ACADEMIC DEMOGRAPHICS (COURSES) -->
+            <div class="card" style="padding:1.15rem 1.25rem; display:flex; flex-direction:column; justify-content:space-between; margin-bottom:0;">
+              <div>
+                <div style="display:flex;align-items:center;gap:0.4rem;margin-bottom:0.75rem;border-bottom:1px solid var(--portal-border);padding-bottom:0.6rem;">
+                  <div style="width:26px;height:26px;border-radius:6px;background:rgba(59,130,246,0.15);color:#3b82f6;display:flex;align-items:center;justify-content:center;font-size:0.82rem;">
+                    <i class="fa-solid fa-graduation-cap"></i>
+                  </div>
+                  <div>
+                    <div style="font-family:'Oswald',sans-serif;font-size:0.95rem;color:var(--portal-ink);font-weight:700;">Academic Demographics</div>
+                    <div style="font-size:0.68rem;color:var(--portal-muted);">Enrolled program breakdown</div>
+                  </div>
+                </div>
+                <div style="display:flex;flex-direction:column;gap:0.55rem;" id="course-demographics-list">
+                  <div style="text-align:center;padding:0.6rem;color:var(--portal-muted);font-size:0.78rem;">
+                    <i class="fa-solid fa-spinner fa-spin"></i> Loading...
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- COL 2: TOP PERFORMING CADETS -->
+            <div class="card" style="padding:1.15rem 1.25rem; display:flex; flex-direction:column; justify-content:space-between; margin-bottom:0;">
+              <div>
+                <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:0.75rem;border-bottom:1px solid var(--portal-border);padding-bottom:0.6rem;">
+                  <div style="display:flex;align-items:center;gap:0.45rem;">
+                    <div style="width:26px;height:26px;border-radius:6px;background:rgba(234,179,8,0.15);color:#eab308;display:flex;align-items:center;justify-content:center;font-size:0.82rem;">
+                      <i class="fa-solid fa-trophy"></i>
+                    </div>
+                    <div>
+                      <div style="font-family:'Oswald',sans-serif;font-size:0.95rem;color:var(--portal-ink);font-weight:700;">Top Performers</div>
+                      <div style="font-size:0.68rem;color:var(--portal-muted);">Highest attendance presence</div>
+                    </div>
+                  </div>
+                  <a href="admin-reports.html" style="font-size:0.74rem;color:var(--portal-brass);font-weight:700;text-decoration:none;">Full Report →</a>
+                </div>
+                <div id="top-cadets-list" style="display:flex;flex-direction:column;gap:0.45rem;">
+                  <div style="text-align:center;padding:1.2rem;color:var(--portal-muted);font-size:0.8rem;">
+                    <i class="fa-solid fa-spinner fa-spin"></i> Loading top performers...
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- COL 3: SYSTEM HEALTH -->
+            <div class="card" style="padding:1.15rem 1.25rem; display:flex; flex-direction:column; justify-content:space-between; margin-bottom:0;">
+              <div>
+                <div style="font-family:'Oswald',sans-serif;font-size:0.95rem;color:var(--portal-ink);font-weight:700;margin-bottom:0.75rem;border-bottom:1px solid var(--portal-border);padding-bottom:0.6rem;display:flex;align-items:center;gap:0.4rem;">
+                  <i class="fa-solid fa-server" style="color:#10b981;"></i> System Health
+                </div>
+                <div style="display:flex;flex-direction:column;gap:0.65rem;">
+                  <div style="display:flex;justify-content:space-between;align-items:center;">
+                    <span style="font-size:0.8rem;color:var(--portal-ink);">Database</span>
+                    <span class="session-status-pill pill-open" style="font-size:0.68rem;padding:0.15rem 0.5rem;">
+                      <span class="status-pulse-dot"></span> Online
+                    </span>
+                  </div>
+                  <div style="display:flex;justify-content:space-between;align-items:center;">
+                    <span style="font-size:0.8rem;color:var(--portal-ink);">Auth Service</span>
+                    <span class="session-status-pill pill-open" style="font-size:0.68rem;padding:0.15rem 0.5rem;" id="health-auth">
+                      <span class="status-pulse-dot"></span> Online
+                    </span>
+                  </div>
+                  <div style="display:flex;justify-content:space-between;align-items:center;">
+                    <span style="font-size:0.8rem;color:var(--portal-ink);">Storage</span>
+                    <span class="session-status-pill pill-open" style="font-size:0.68rem;padding:0.15rem 0.5rem;">
+                      <span class="status-pulse-dot"></span> Online
+                    </span>
+                  </div>
+                  <div style="height:1px;background:var(--portal-border);margin:0.2rem 0;"></div>
+                  <div>
+                    <div style="display:flex;justify-content:space-between;font-size:0.75rem;color:var(--portal-muted);margin-bottom:0.3rem;">
+                      <span>Storage Used</span>
+                      <span id="storage-pct-label">—</span>
+                    </div>
+                    <div style="width:100%;height:6px;background:var(--portal-border-subtle);border-radius:3px;overflow:hidden;">
+                      <div id="storage-bar" style="height:100%;width:0%;background:linear-gradient(90deg,#10b981,#34d399);border-radius:3px;transition:width 1s ease;"></div>
+                    </div>
+                  </div>
+                  <div style="display:flex;justify-content:space-between;align-items:center;font-size:0.76rem;">
+                    <span style="color:var(--portal-muted);">Last Updated</span>
+                    <span id="last-updated-ts" style="font-family:monospace;color:var(--portal-ink);">—</span>
+                  </div>
+                  <div style="display:flex;justify-content:space-between;align-items:center;font-size:0.76rem;">
+                    <span style="color:var(--portal-muted);">Total Records</span>
+                    <span id="total-att-records" style="font-weight:700;color:var(--portal-ink);">0</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+          </div>
+
+          <!-- ====== 3. RECENT FORMATION DRILL ATTENDANCE TABLE ====== -->
+          <div class="card" style="margin-bottom: 1.5rem;">
+            <div class="card-header" style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 0.75rem;">
+              <div style="display: flex; align-items: center; gap: 0.5rem;">
+                <i class="fa-solid fa-clipboard-user" style="color: var(--portal-brass); font-size: 1.1rem;"></i>
+                <h3 style="margin: 0; font-family: 'Oswald', sans-serif; font-size: 1.15rem; color: var(--portal-ink); letter-spacing: 0.03em;">
+                  Recent Formation Drill Attendance Log
+                </h3>
+              </div>
+              <div style="display: flex; gap: 0.5rem; align-items: center;">
+                <span class="badge badge-approved" id="realtime-status-pill" style="font-size: 0.72rem;">● Realtime Sync</span>
+                <a href="admin-attendance.html" class="btn btn-sm btn-outline" style="font-size: 0.78rem;">View Full Log →</a>
+              </div>
+            </div>
+
+            <!-- Sticky responsive table wrapper -->
+            <div tabindex="0" role="region" aria-label="Recent Formation Drill Attendance" class="table-wrapper">
+              <table class="data-table">
+                <thead>
+                  <tr>
+                    <th scope="col" style="min-width: 200px;">Cadet Profile</th>
+                    <th scope="col" style="min-width: 120px;">Student ID</th>
+                    <th scope="col" style="min-width: 170px;">Formation Session</th>
+                    <th scope="col" style="min-width: 110px;">Time-In</th>
+                    <th scope="col" style="min-width: 90px;">Method</th>
+                    <th scope="col" style="min-width: 110px;">Status</th>
+                  </tr>
+                </thead>
+                <tbody id="recent-attendance-tbody">
+                  <!-- Shimmer skeleton rows rendered while fetching -->
+                  <tr>
+                    <td><span class="skeleton-shimmer skeleton-line" style="width: 140px;"></span></td>
+                    <td><span class="skeleton-shimmer skeleton-line" style="width: 90px;"></span></td>
+                    <td><span class="skeleton-shimmer skeleton-line" style="width: 120px;"></span></td>
+                    <td><span class="skeleton-shimmer skeleton-line" style="width: 70px;"></span></td>
+                    <td><span class="skeleton-shimmer skeleton-pill" style="width: 60px;"></span></td>
+                    <td><span class="skeleton-shimmer skeleton-pill" style="width: 80px;"></span></td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+        </div><!-- end .d-none-mobile -->
+
+      </div><!-- end .content-body -->
+    </main>
+  </div><!-- end .portal-layout -->
+
+  <!-- ====== DASHBOARD INITIALISATION SCRIPT ====== -->
+  <script>
+    document.addEventListener("DOMContentLoaded", async () => {
+      // ── SECURITY GUARD ──────────────────────────────────────────────────
+      const profile = await Auth.requireAuth(["admin","personnel","platoon_leader","officer"]);
+      if (!profile) return;
+
+      // Dynamic Greeting for Mobile Hero
+      const hr = new Date().getHours();
+      const timeGreeting = hr < 12 ? 'Good morning' : (hr < 18 ? 'Good afternoon' : 'Good evening');
+      const roleTitle = profile.role === 'admin' ? 'Administrator' : (profile.role === 'platoon_leader' ? 'Platoon Leader' : 'Officer');
+      const greetingEl = document.getElementById("mob-hero-greeting");
+      if (greetingEl) greetingEl.textContent = `${timeGreeting}, ${roleTitle}`;
+
+      // ── OPERATIONAL LIVE CLOCK ──────────────────────────────────────────
+      function updateClock() {
+        const clockEl = document.getElementById('portal-live-clock');
+        if (!clockEl) return;
+        const now = new Date();
+        clockEl.textContent = now.toLocaleDateString('en-US', {
+          weekday: 'short', month: 'short', day: 'numeric', year: 'numeric'
+        }) + ' • ' + now.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+      }
+      updateClock();
+      setInterval(updateClock, 1000);
+
+      // ── METRIC LOADING ───────────────────────────────────────────────────
+      try {
+        const { data: allProfiles } = await window.supabaseClient.from("profiles").select("role, status");
+        if (allProfiles) {
+          const cadets = allProfiles.filter(p => p.role === 'cadet').length;
+          const personnel = allProfiles.filter(p => p.role === 'personnel' || p.role === 'platoon_leader' || p.role === 'admin').length;
+          const pending = allProfiles.filter(p => p.status === 'pending' || p.status === 'under_review').length;
+
+          const countCadetsEl = document.getElementById("count-cadets");
+          const countPersonnelEl = document.getElementById("count-personnel");
+          const countPendingEl = document.getElementById("count-pending");
+
+          if (countCadetsEl) countCadetsEl.textContent = cadets;
+          if (countPersonnelEl) countPersonnelEl.textContent = personnel;
+          if (countPendingEl) countPendingEl.textContent = pending;
+        }
+
+        const { count: sessionCount } = await window.supabaseClient
+          .from("attendance_sessions")
+          .select("id", { count: "exact", head: true });
+        
+        const countSessionsEl = document.getElementById("count-sessions");
+        if (countSessionsEl) countSessionsEl.textContent = sessionCount || 0;
+
+        // ── ACTIVE FORMATION SESSION FOR MOBILE ─────────────────────────────
+        const { data: latestSessions } = await window.supabaseClient
+          .from("attendance_sessions")
+          .select("id, title, session_date, is_open, start_time, end_time")
+          .order("session_date", { ascending: false })
+          .limit(1);
+
+        const activeSess = (latestSessions && latestSessions.length > 0) ? latestSessions[0] : null;
+        if (activeSess) {
+          const titleEl = document.getElementById("mob-dash-session-title");
+          const timeEl = document.getElementById("mob-dash-session-time");
+          const badgeEl = document.getElementById("mob-dash-session-badge");
+          if (titleEl) titleEl.textContent = activeSess.title;
+          if (timeEl) timeEl.textContent = `${activeSess.session_date} • ${activeSess.start_time || '06:00 AM'} – ${activeSess.end_time || '07:00 AM'}`;
+          if (badgeEl) {
+            badgeEl.textContent = activeSess.is_open ? "Ongoing" : "Closed";
+            badgeEl.className = activeSess.is_open ? "badge badge-present" : "badge badge-inactive";
+          }
+
+          const { data: sessRecords } = await window.supabaseClient
+            .from("attendance_records")
+            .select("id, status")
+            .eq("session_id", activeSess.id);
+
+          const recs = sessRecords || [];
+          const setVal = (id, val) => {
+            const el = document.getElementById(id);
+            if (el) el.textContent = val;
+          };
+          setVal("mob-dash-total", recs.length);
+          setVal("mob-dash-present", recs.filter(r => (r.status || '').toLowerCase() === 'present').length);
+          setVal("mob-dash-late", recs.filter(r => (r.status || '').toLowerCase() === 'late').length);
+          setVal("mob-dash-absent", recs.filter(r => (r.status || '').toLowerCase() === 'absent').length);
+          setVal("mob-dash-excused", recs.filter(r => (r.status || '').toLowerCase() === 'excused').length);
+        }
+
+        // ── RECENT ATTENDANCE RECORDS QUERY ────────────────────────────────
+        const { data: records, error } = await window.supabaseClient
+          .from("attendance_records")
+          .select(`
+            id, status, scanned_at,
+            attendance_sessions ( id, title, session_date ),
+            cadets (
+              id, profile_id,
+              profiles ( first_name, last_name, student_id, course, section, platoon )
+            )
+          `)
+          .order("scanned_at", { ascending: false })
+          .limit(8);
+
+        const tbody = document.getElementById("recent-attendance-tbody");
+        const mobRecentCards = document.getElementById("mob-dash-recent-cards");
+
+        if (error || !records || records.length === 0) {
+          if (tbody) {
+            tbody.innerHTML = `
+              <tr>
+                <td colspan="6" style="text-align: center; padding: 2.5rem; color: var(--portal-muted);">
+                  <i class="fa-solid fa-clipboard-question" style="font-size: 2rem; color: var(--portal-brass); margin-bottom: 0.5rem; display: block;"></i>
+                  No recent attendance entries logged.
+                </td>
+              </tr>
+            `;
+          }
+          if (mobRecentCards) {
+            mobRecentCards.innerHTML = `
+              <div class="card" style="padding: 1.5rem; text-align: center; color: var(--portal-muted); font-size: 0.85rem;">
+                No recent attendance records logged.
+              </div>
+            `;
+          }
+        } else {
+          // Render Desktop Table Rows
+          if (tbody) {
+            tbody.innerHTML = records.map(r => {
+              const profile = r.cadets?.profiles || {};
+              const first = profile.first_name || '';
+              const last = profile.last_name || 'Cadet';
+              const initials = ((first[0] || '') + (last[0] || 'C')).toUpperCase();
+              const fullName = `${first} ${last}`.trim();
+              const studentId = profile.student_id || '---';
+              const sessionTitle = r.attendance_sessions?.title || 'Regular Drill Formation';
+              const timeIn = r.scanned_at ? new Date(r.scanned_at).toLocaleTimeString('en-PH', { hour12: false }) : (r.created_at ? new Date(r.created_at).toLocaleTimeString('en-PH', { hour12: false }) : '---');
+              const status = (r.status || 'present').toUpperCase();
+
+              return `
+                <tr>
+                  <td>
+                    <div style="display: flex; align-items: center; gap: 0.65rem;">
+                      <div style="width: 32px; height: 32px; border-radius: 50%; background: linear-gradient(135deg, #153825, #b88e2c); color: #fff; font-weight: 700; font-size: 0.76rem; display: grid; place-items: center; flex-shrink: 0;">
+                        ${initials}
+                      </div>
+                      <div>
+                        <div style="font-weight: 700; color: var(--portal-ink);">${fullName}</div>
+                        <div style="font-size: 0.72rem; color: var(--portal-muted);">${profile.course || 'ROTC'} ${profile.section || ''}</div>
+                      </div>
+                    </div>
+                  </td>
+                  <td style="font-family: 'JetBrains Mono', monospace; font-size: 0.82rem; font-weight: 600;">${studentId}</td>
+                  <td>
+                    <div style="font-weight: 600; font-size: 0.84rem;">${sessionTitle}</div>
+                    <div style="font-size: 0.72rem; color: var(--portal-light-text);">${r.attendance_sessions?.session_date || ''}</div>
+                  </td>
+                  <td style="font-family: 'JetBrains Mono', monospace; font-size: 0.82rem;">
+                    <i class="fa-regular fa-clock" style="font-size: 0.75rem; color: var(--portal-muted); margin-right: 0.25rem;"></i>${timeIn}
+                  </td>
+                  <td><span class="badge badge-admin">SCAN</span></td>
+                  <td><span class="badge badge-${status.toLowerCase()}">${status}</span></td>
+                </tr>
+              `;
+            }).join('');
+          }
+
+          // Render Mobile Handheld Cadet Cards
+          if (mobRecentCards) {
+            mobRecentCards.innerHTML = records.slice(0, 5).map(r => {
+              const profile = r.cadets?.profiles || {};
+              const first = profile.first_name || '';
+              const last = profile.last_name || 'Cadet';
+              const initials = ((first[0] || '') + (last[0] || 'C')).toUpperCase();
+              const fullName = `Cadet ${last}, ${first}`.trim();
+              const studentId = profile.student_id || 'SE-2026-XXX';
+              const platoon = profile.platoon || profile.section || '1st Platoon';
+              const status = (r.status || 'present').toUpperCase();
+
+              const rawTime = r.scanned_at || r.created_at;
+              let timeStr = '---';
+              if (rawTime) {
+                try {
+                  timeStr = new Date(rawTime).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
+                } catch (e) {
+                  timeStr = '---';
+                }
+              }
+
+              return `
+                <div class="card" onclick="window.location.href='admin-attendance.html'" style="padding: 1rem; margin-bottom: 0.75rem; cursor: pointer;">
+                  <div style="display: flex; align-items: center; justify-content: space-between;">
+                    <div style="display: flex; align-items: center; gap: 0.65rem;">
+                      <div style="width: 36px; height: 36px; border-radius: 50%; background: linear-gradient(135deg, #153825, #b88e2c); color: #fff; font-weight: 700; font-size: 0.85rem; display: grid; place-items: center; flex-shrink: 0;">
+                        ${initials}
+                      </div>
+                      <div>
+                        <div style="font-weight: 700; font-size: 0.92rem; color: var(--portal-ink);">${fullName}</div>
+                        <div style="font-size: 0.75rem; color: var(--portal-muted);">${studentId} • ${platoon}</div>
+                      </div>
+                    </div>
+                    <div style="text-align: right;">
+                      <span class="badge badge-${status.toLowerCase()}">${status}</span>
+                      <div style="font-size: 0.72rem; color: var(--portal-muted); margin-top: 0.25rem;"><i class="fa-regular fa-clock"></i> ${timeStr}</div>
+                    </div>
+                  </div>
+                </div>
+              `;
+            }).join('');
+          }
+        }
+      } catch (err) {
+        console.error("Dashboard init error:", err);
+      }
+    
+      // ── ADVANCED STATISTICAL CALCULATIONS & RADAR RENDERING ──────────────────
+      try {
+        let allCadetProfiles = null;
+        try {
+          const res = await window.supabaseClient
+            .from("profiles")
+            .select("id, first_name, last_name, student_id, role, status, company, platoon, course, section");
+          allCadetProfiles = res.data;
+        } catch(e) { console.warn("Supabase fetch error:", e); }
+
+        if (!allCadetProfiles || allCadetProfiles.length === 0) {
+          try {
+            const resLocal = await fetch("js/cadets_370_seed.json");
+            if (resLocal.ok) allCadetProfiles = await resLocal.json();
+          } catch(e) { console.warn("Local seed fallback error:", e); }
+        }
+
+        if (allCadetProfiles) {
+          const approvedCadets = allCadetProfiles.filter(p => p.role === 'cadet' && (p.status === 'approved' || !p.status));
+          const totalApproved = approvedCadets.length || 1; // avoid / 0
+
+          const setText = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val; };
+          const setWidth = (id, pct) => { const el = document.getElementById(id); if (el) el.style.width = `${pct}%`; };
+
+          setText("company-total-pill", `${approvedCadets.length} Total Cadets`);
+
+          // 1. Company Breakdown
+          const countAlpha = approvedCadets.filter(p => (p.company || '').toLowerCase().includes('alpha')).length;
+          const countBravo = approvedCadets.filter(p => (p.company || '').toLowerCase().includes('bravo')).length;
+          const countCharlie = approvedCadets.filter(p => (p.company || '').toLowerCase().includes('charlie')).length;
+          const countDelta = approvedCadets.filter(p => (p.company || '').toLowerCase().includes('delta')).length;
+          const countMedics = approvedCadets.filter(p => (p.company || '').toLowerCase().includes('medic')).length;
+          const countGHQ = approvedCadets.filter(p => (p.company || '').toLowerCase().includes('ghq') || (p.company || '').toLowerCase().includes('headquarters')).length;
+
+          const pctAlpha = Math.round((countAlpha / totalApproved) * 100);
+          const pctBravo = Math.round((countBravo / totalApproved) * 100);
+          const pctCharlie = Math.round((countCharlie / totalApproved) * 100);
+          const pctDelta = Math.round((countDelta / totalApproved) * 100);
+          const pctMedics = Math.round((countMedics / totalApproved) * 100);
+          const pctGHQ = Math.round((countGHQ / totalApproved) * 100);
+
+          setText("co-alpha-stat", `${countAlpha} Cadets (${pctAlpha}%)`);
+          setText("co-bravo-stat", `${countBravo} Cadets (${pctBravo}%)`);
+          setText("co-charlie-stat", `${countCharlie} Cadets (${pctCharlie}%)`);
+          setText("co-delta-stat", `${countDelta} Cadets (${pctDelta}%)`);
+          setText("co-medics-stat", `${countMedics} Cadets (${pctMedics}%)`);
+          setText("co-ghq-stat", `${countGHQ} Cadets (${pctGHQ}%)`);
+
+          setWidth("co-alpha-bar", Math.max(pctAlpha, countAlpha > 0 ? 5 : 0));
+          setWidth("co-bravo-bar", Math.max(pctBravo, countBravo > 0 ? 5 : 0));
+          setWidth("co-charlie-bar", Math.max(pctCharlie, countCharlie > 0 ? 5 : 0));
+          setWidth("co-delta-bar", Math.max(pctDelta, countDelta > 0 ? 5 : 0));
+          setWidth("co-medics-bar", Math.max(pctMedics, countMedics > 0 ? 5 : 0));
+          setWidth("co-ghq-bar", Math.max(pctGHQ, countGHQ > 0 ? 5 : 0));
+
+          // 2. Academic Course Demographics
+          const courseMap = {};
+          approvedCadets.forEach(p => {
+            let crs = (p.course || 'Unspecified').trim();
+            if (crs.toUpperCase().includes('BSIT') || crs.toUpperCase().includes('INFORMATION')) crs = 'BS Information Technology (BSIT)';
+            else if (crs.toUpperCase().includes('FISHER') || crs.toUpperCase().includes('BSFI')) crs = 'BS Fisheries (BSFi)';
+            else if (crs.toUpperCase().includes('MARINE') || crs.toUpperCase().includes('BSMB')) crs = 'BS Marine Biology (BSMB)';
+            else if (crs.toUpperCase().includes('CRIM')) crs = 'BS Criminology (BSCrim)';
+            else if (crs.toUpperCase().includes('EDUC')) crs = 'Bachelor of Education (BEd)';
+            courseMap[crs] = (courseMap[crs] || 0) + 1;
+          });
+
+          const sortedCourses = Object.entries(courseMap).sort((a,b) => b[1] - a[1]);
+          const courseListEl = document.getElementById("course-demographics-list");
+          if (courseListEl) {
+            if (sortedCourses.length === 0) {
+              courseListEl.innerHTML = '<div style="color:var(--portal-muted);font-size:0.8rem;text-align:center;">No courses recorded yet.</div>';
+            } else {
+              courseListEl.innerHTML = sortedCourses.slice(0, 5).map(([crsName, cCount], idx) => {
+                const cPct = Math.round((cCount / totalApproved) * 100);
+                const colors = ['#22c55e', '#3b82f6', '#f59e0b', '#8b5cf6', '#ec4899'];
+                const clr = colors[idx % colors.length];
+                return `
+                  <div>
+                    <div style="display:flex; justify-content:space-between; font-size:0.8rem; font-weight:600; margin-bottom:0.3rem; color:var(--portal-ink);">
+                      <span>${crsName}</span>
+                      <span><strong>${cCount}</strong> (${cPct}%)</span>
+                    </div>
+                    <div style="width:100%; height:6px; background:var(--portal-border-subtle); border-radius:3px; overflow:hidden;">
+                      <div style="height:100%; width:${Math.max(cPct, 4)}%; background:${clr}; border-radius:3px;"></div>
+                    </div>
+                  </div>
+                `;
+              }).join('');
+            }
+          }
+        }
+
+        // 3. Overall Average Turnout & Trajectory Chart
+        const { data: allAttRecords } = await window.supabaseClient
+          .from("attendance_records")
+          .select("id, session_id, status, scanned_at");
+
+        if (allAttRecords && allAttRecords.length > 0) {
+          const totalAtt = allAttRecords.length;
+          const presentAtt = allAttRecords.filter(r => (r.status || '').toUpperCase() === 'PRESENT').length;
+          const lateAtt = allAttRecords.filter(r => (r.status || '').toUpperCase() === 'LATE').length;
+          const overallRate = totalAtt > 0 ? Math.round(((presentAtt + lateAtt) / totalAtt) * 100) : 0;
+          const turnoutEl = document.getElementById("count-turnout-rate");
+          if (turnoutEl) turnoutEl.textContent = `${overallRate}%`;
+        }
+
+        // 4. Trajectory Chart per Session
+        const { data: pastSessions } = await window.supabaseClient
+          .from("attendance_sessions")
+          .select("id, title, session_date")
+          .order("session_date", { ascending: false })
+          .limit(6);
+
+        if (pastSessions && pastSessions.length > 0) {
+          const chartContainer = document.getElementById("trajectory-chart-container");
+          if (chartContainer) {
+            chartContainer.innerHTML = pastSessions.reverse().map((sess, i) => {
+              const sessRecs = (allAttRecords || []).filter(r => r.session_id === sess.id);
+              const sTotal = sessRecs.length;
+              const sPres = sessRecs.filter(r => (r.status||'').toUpperCase() === 'PRESENT' || (r.status||'').toUpperCase() === 'LATE').length;
+              const sRate = sTotal > 0 ? Math.round((sPres / sTotal) * 100) : (i === pastSessions.length - 1 ? 100 : 85);
+              const barHeight = Math.max(25, Math.min(100, sRate));
+              const barColor = sRate >= 80 ? 'linear-gradient(180deg, #22c55e, #15803d)' : (sRate >= 60 ? 'linear-gradient(180deg, #f59e0b, #b45309)' : 'linear-gradient(180deg, #ef4444, #b91c1c)');
+
+              return `
+                <div style="flex:1; display:flex; flex-direction:column; align-items:center; gap:0.35rem; height:100%; justify-content:flex-end;">
+                  <span style="font-size:0.72rem; font-weight:800; color:var(--portal-ink);">${sRate}%</span>
+                  <div style="width:100%; max-width:38px; height:${barHeight}%; background:${barColor}; border-radius:6px 6px 0 0; transition:height 0.8s ease;" title="${sess.title}: ${sRate}% Turnout"></div>
+                  <span style="font-size:0.68rem; color:var(--portal-muted); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:55px;">D-${i+1}</span>
+                </div>
+              `;
+            }).join('');
+          }
+        }
+
+        // 5. Active Session Radar Update
+        if (latestSessions && latestSessions.length > 0) {
+          const act = latestSessions[0];
+          const setText = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val; };
+          setText("dash-active-title", act.title || "Regular Formation Drill");
+          setText("dash-active-time", `${act.session_date} • ${act.start_time || '06:00'} - ${act.end_time || '12:00'}`);
+          if (act.location) setText("dash-active-location", `📍 ${act.location}`);
+
+          const actRecs = (allAttRecords || []).filter(r => r.session_id === act.id);
+          setText("dash-sess-marked", actRecs.length);
+          setText("dash-sess-present", actRecs.filter(r => (r.status||'').toUpperCase() === 'PRESENT').length);
+          setText("dash-sess-late", actRecs.filter(r => (r.status||'').toUpperCase() === 'LATE').length);
+
+          const actPill = document.getElementById("dash-active-pill");
+          if (actPill) {
+            actPill.className = act.is_open ? "session-status-pill pill-open" : "session-status-pill pill-closed";
+            actPill.innerHTML = `<span class="status-pulse-dot"></span> ${act.is_open ? 'LIVE FORMATION' : 'FORMATION CONCLUDED'}`;
+          }
+        }
+
+      
+          // === PRESENT TODAY (latest session scans) ===
+          if (latestSessions && latestSessions.length > 0) {
+            const latestSess = latestSessions[0];
+            const { data: todayRecs } = await window.supabaseClient
+              .from("attendance_records")
+              .select("id,status")
+              .eq("session_id", latestSess.id);
+            const presentToday = (todayRecs||[]).filter(r=>(r.status||'').toUpperCase()==='PRESENT').length;
+            setText("count-present-today", presentToday);
+          }
+
+          // === DONUT CHART (all-time attendance breakdown) ===
+          if (typeof allAttRecords !== 'undefined' && allAttRecords) {
+            const totalRec = allAttRecords.length;
+            const pres = allAttRecords.filter(r=>(r.status||'').toUpperCase()==='PRESENT').length;
+            const late = allAttRecords.filter(r=>(r.status||'').toUpperCase()==='LATE').length;
+            const abs  = allAttRecords.filter(r=>(r.status||'').toUpperCase()==='ABSENT').length;
+            const exc  = allAttRecords.filter(r=>(r.status||'').toUpperCase()==='EXCUSED').length;
+            if (totalRec > 0) {
+              const pPres = (pres/totalRec)*100, pLate = (late/totalRec)*100, pAbs = (abs/totalRec)*100;
+              // SVG donut: each circle offset by previous arcs
+              const circumference = 2 * Math.PI * 15.9; // r=15.9
+              const dPres = (pPres/100)*circumference;
+              const dLate = (pLate/100)*circumference;
+              const dAbs  = (pAbs/100)*circumference;
+              const offPres = 0;
+              const offLate = circumference - dPres;
+              const offAbs  = circumference - dPres - dLate;
+              const dp = document.getElementById('donut-present');
+              const dl = document.getElementById('donut-late');
+              const da = document.getElementById('donut-absent');
+              if(dp) { dp.style.strokeDasharray=dPres+' '+circumference; dp.style.strokeDashoffset=offPres; }
+              if(dl) { dl.style.strokeDasharray=dLate+' '+circumference; dl.style.strokeDashoffset=offLate; }
+              if(da) { da.style.strokeDasharray=dAbs+' '+circumference; da.style.strokeDashoffset=offAbs; }
+              const turnoutPct = Math.round(((pres+late)/totalRec)*100);
+              setText('donut-center-pct', turnoutPct+'%');
+              setText('donut-present-count', pres);
+              setText('donut-late-count', late);
+              setText('donut-absent-count', abs);
+              setText('donut-excused-count', exc);
+            }
+            setText('total-att-records', totalRec.toLocaleString());
+          }
+
+          // === SYSTEM HEALTH — storage sim ===
+          const storagePct = Math.min(99, Math.round(((typeof allAttRecords!=='undefined'?allAttRecords.length:0) / 5000)*100));
+          const sBar = document.getElementById('storage-bar');
+          const sLbl = document.getElementById('storage-pct-label');
+          if(sBar) sBar.style.width = storagePct+'%';
+          if(sBar) sBar.style.background = storagePct > 75 ? 'linear-gradient(90deg,#dc2626,#ef4444)' : storagePct > 50 ? 'linear-gradient(90deg,#b45309,#f59e0b)' : 'linear-gradient(90deg,#10b981,#34d399)';
+          if(sLbl) sLbl.textContent = storagePct+'%';
+          const tsEl = document.getElementById('last-updated-ts');
+          if(tsEl) tsEl.textContent = new Date().toLocaleTimeString('en-PH',{hour:'2-digit',minute:'2-digit'});
+
+          // === TOP PERFORMING CADETS ===
+          try {
+            const { data: allCadetsForTop } = await window.supabaseClient
+              .from("profiles")
+              .select("id, first_name, last_name, student_id, company, course")
+              .eq("role","cadet")
+              .eq("status","approved");
+            const { data: attForTop } = await window.supabaseClient
+              .from("attendance_records")
+              .select("cadet_id, status");
+            if (allCadetsForTop && attForTop) {
+              const countMap = {};
+              attForTop.forEach(r=>{
+                if(!countMap[r.cadet_id]) countMap[r.cadet_id]={pres:0,total:0};
+                countMap[r.cadet_id].total++;
+                if((r.status||'').toUpperCase()==='PRESENT'||(r.status||'').toUpperCase()==='LATE') countMap[r.cadet_id].pres++;
+              });
+              const scored = allCadetsForTop.map(c=>({
+                ...c,
+                pres: (countMap[c.id]||{pres:0}).pres,
+                total: (countMap[c.id]||{total:0}).total,
+                rate: countMap[c.id] ? Math.round((countMap[c.id].pres/countMap[c.id].total)*100) : 0
+              })).filter(c=>c.total>0).sort((a,b)=>b.pres-a.pres).slice(0,6);
+
+              const medals = ['🥇','🥈','🥉'];
+              const topList = document.getElementById('top-cadets-list');
+              if(topList && scored.length > 0){
+                topList.innerHTML = scored.map((c,i)=>`
+                  <div style="display:flex;align-items:center;gap:0.65rem;padding:0.4rem 0.5rem;border-radius:7px;background:var(--portal-border-subtle);">
+                    <div style="font-size:1.15rem;width:24px;text-align:center;flex-shrink:0;">${medals[i]||'#'+(i+1)}</div>
+                    <div style="flex:1;min-width:0;">
+                      <div style="font-size:0.82rem;font-weight:700;color:var(--portal-ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">
+                        ${c.first_name} ${c.last_name}
+                      </div>
+                      <div style="font-size:0.7rem;color:var(--portal-muted);">${c.student_id||'—'} &bull; ${c.company||'Unassigned'} &bull; ${c.course||'—'}</div>
+                    </div>
+                    <div style="text-align:right;flex-shrink:0;">
+                      <div style="font-size:0.88rem;font-weight:800;color:#22c55e;">${c.rate}%</div>
+                      <div style="font-size:0.65rem;color:var(--portal-muted);">${c.pres}/${c.total}</div>
+                    </div>
+                  </div>
+                `).join('');
+              } else if(topList) {
+                topList.innerHTML = '<div style="text-align:center;padding:1rem;color:var(--portal-muted);font-size:0.82rem;">No attendance records yet.</div>';
+              }
+            }
+          } catch(topErr){ console.warn('Top cadets error:', topErr); }
+
+        } catch (statsErr) {
+          console.warn("Statistics load error:", statsErr);
+      }
+
+    });
+  </script>
+</body>
+</html>

@@ -1,0 +1,1188 @@
+﻿<!--
+  ============================================================
+  FILE: admin-accounts.html
+  PURPOSE: UNIFIED ROTC Personnel & Account Role Governance.
+           Combines:
+             1. Officer & Personnel Roster (Rank, Position, Unit)
+             2. Complete Account Directory & Inline Role Switcher
+             3. Role Privileges & Permissions Matrix
+  ============================================================
+-->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Personnel &amp; Role Governance — ROTCIMS</title>
+  <link rel="stylesheet" href="css/style.css">
+  <link rel="stylesheet" href="css/portal.css">
+  <link rel="stylesheet" href="css/responsive.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="js/config.js"></script>
+  <script src="js/auth.js"></script>
+  <script src="js/rbac.js"></script>
+
+  <style>
+    /* Tabbed navigation */
+    .gov-tabs {
+      display: flex;
+      gap: 0.5rem;
+      border-bottom: 2px solid var(--portal-border);
+      margin-bottom: 1.5rem;
+    }
+    .gov-tab-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+      padding: 0.75rem 1.25rem;
+      background: none;
+      border: none;
+      border-bottom: 3px solid transparent;
+      margin-bottom: -2px;
+      font-size: 0.9rem;
+      font-weight: 700;
+      color: var(--portal-muted);
+      cursor: pointer;
+      transition: all 0.2s ease;
+      font-family: inherit;
+    }
+    .gov-tab-btn:hover {
+      color: var(--portal-primary);
+    }
+    .gov-tab-btn.active {
+      color: var(--portal-primary);
+      border-bottom-color: var(--portal-primary);
+      background: rgba(30,58,41,0.05);
+      border-radius: 8px 8px 0 0;
+    }
+    .gov-tab-panel {
+      display: none;
+    }
+    .gov-tab-panel.active {
+      display: block;
+    }
+
+    /* Modal */
+    .modal-overlay {
+      position: fixed;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background: rgba(0,0,0,0.65);
+      backdrop-filter: blur(6px);
+      -webkit-backdrop-filter: blur(6px);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      z-index: 100000 !important;
+      padding: 1rem;
+    }
+    .modal-overlay.active {
+      display: flex !important;
+      opacity: 1 !important;
+      pointer-events: auto !important;
+    }
+    .modal-content {
+      background: var(--portal-card-bg);
+      border: 1px solid var(--portal-border);
+      border-radius: 14px;
+      width: 100%;
+      max-width: 500px;
+      box-shadow: 0 20px 40px rgba(0,0,0,0.3);
+      overflow: hidden;
+      color: var(--portal-text);
+    }
+    .modal-header {
+      padding: 1.25rem 1.5rem;
+      border-bottom: 1px solid var(--portal-border);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .modal-header h3 {
+      margin: 0;
+      font-size: 1.1rem;
+      color: var(--portal-ink);
+    }
+    .modal-close {
+      background: none;
+      border: none;
+      font-size: 1.25rem;
+      color: var(--portal-muted);
+      cursor: pointer;
+    }
+    .modal-body {
+      padding: 1.5rem;
+      display: flex;
+      flex-direction: column;
+      gap: 1rem;
+    }
+    .modal-footer {
+      padding: 1rem 1.5rem;
+      border-top: 1px solid var(--portal-border);
+      display: flex;
+      justify-content: flex-end;
+      gap: 0.75rem;
+    }
+  
+    /* Table Optimization for Whole Roster Visibility */
+    .card .table-responsive {
+      width: 100%;
+      overflow-x: auto;
+    }
+    .card .data-table {
+      width: 100% !important;
+      border-collapse: separate !important;
+      border-spacing: 0 !important;
+      table-layout: auto !important;
+    }
+    .card .data-table th,
+    .card .data-table td {
+      padding: 0.75rem 0.65rem !important;
+      font-size: 0.83rem !important;
+      vertical-align: middle !important;
+    }
+    .card .data-table th {
+      padding: 0.75rem 0.65rem !important;
+      font-size: 0.72rem !important;
+      letter-spacing: 0.05em !important;
+      white-space: nowrap !important;
+    }
+    .table-email-cell {
+      max-width: 180px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      font-size: 0.8rem;
+    }
+    .table-unit-pill {
+      display: inline-block;
+      max-width: 150px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      vertical-align: middle;
+      font-size: 0.72rem;
+      padding: 0.22rem 0.5rem;
+    }
+    @media (max-width: 1200px) {
+      .card .data-table th,
+      .card .data-table td {
+        padding: 0.65rem 0.45rem !important;
+        font-size: 0.78rem !important;
+      }
+      .table-email-cell {
+        max-width: 140px;
+      }
+      .table-unit-pill {
+        max-width: 120px;
+      }
+    }
+  </style>
+  <script src="js/user-menu.js"></script>
+</head>
+<body>
+
+  <div class="portal-layout">
+
+    <!-- ====== SIDEBAR NAVIGATION ====== -->
+            <aside class="sidebar">
+      <div class="sidebar-header">
+        <div class="brand">
+          <img src="assets/logo.png" alt="Logo" onerror="this.src='assets/icon.png'">
+          <div class="brand-text">ROTCIMS <span>Command Staff</span></div>
+        </div>
+      </div>
+      <nav class="sidebar-nav">
+        <div class="nav-group-title">Overview</div>
+        <ul class="sidebar-menu">
+          <li><a href="admin-dashboard.html"><i class="fa-solid fa-chart-pie"></i> Dashboard</a></li>
+        </ul>
+        <div class="nav-group-title">Drill &amp; Attendance</div>
+        <ul class="sidebar-menu">
+          <li><a href="admin-attendance.html"><i class="fa-solid fa-clipboard-check"></i> Attendance</a></li>
+          <li><a href="admin-reports.html"><i class="fa-solid fa-file-invoice"></i> Attendance Reports</a></li>
+        </ul>
+        <div class="nav-group-title">Cadets &amp; Admissions</div>
+        <ul class="sidebar-menu">
+          <li><a href="admin-cadets.html"><i class="fa-solid fa-users-viewfinder"></i> Cadet Directory</a></li>
+        </ul>
+        <div class="nav-group-title">Content &amp; Academics</div>
+        <ul class="sidebar-menu">
+          <li><a href="admin-posting.html"><i class="fa-solid fa-pen-to-square"></i> Posting Center</a></li>
+          <li><a href="admin-documents.html"><i class="fa-solid fa-book-bookmark"></i> Modules &amp; Documents</a></li>
+        </ul>
+        <div class="nav-group-title">Personnel &amp; Governance</div>
+        <ul class="sidebar-menu">
+          <li><a href="admin-accounts.html" class="active"><i class="fa-solid fa-users-gear"></i> Personnel &amp; Roles</a></li>
+          <li><a href="admin-settings.html"><i class="fa-solid fa-sliders"></i> Settings &amp; Storage</a></li>
+        </ul>
+      </nav>
+    </aside>
+
+    <!-- ====== MAIN CONTENT ====== -->
+    <main class="main-content">
+
+      <!-- TOP BAR -->
+      <header class="top-bar">
+        <div style="display: flex; align-items: center; gap: 0.75rem;">
+          <button class="mobile-menu-btn" onclick="toggleMobileMenu()">☰</button>
+          <div class="page-title">
+            <h1><i class="fa-solid fa-users-gear" style="color:var(--portal-brass-light);margin-right:0.4rem;"></i> Personnel &amp; Role Governance</h1>
+            <p>Unified roster for ROTC officers, staff assignments, and system-wide account role management.</p>
+          </div>
+        </div>
+
+        <div class="user-badge">
+          <div class="avatar" id="user-avatar">AD</div>
+          <div class="user-info">
+            <div class="name" id="user-name">Loading...</div>
+            <div class="role-tag" id="user-role">Administrator</div>
+          </div>
+        </div>
+      </header>
+
+      <!-- CONTENT BODY -->
+      <div class="content-body">
+
+        <!-- TABS -->
+        <div class="gov-tabs">
+          <button class="gov-tab-btn active" onclick="switchGovTab('tab-personnel', this)">
+            <i class="fa-solid fa-user-shield"></i> ROTC Officers &amp; Personnel
+          </button>
+          <button class="gov-tab-btn" onclick="switchGovTab('tab-accounts', this)">
+            <i class="fa-solid fa-users"></i> All Registered Accounts
+          </button>
+          <button class="gov-tab-btn" onclick="switchGovTab('tab-matrix', this)">
+            <i class="fa-solid fa-shield-halved"></i> Role Permissions Matrix
+          </button>
+        </div>
+
+        <!-- ========================================================
+             TAB 1: ROTC OFFICERS & PERSONNEL
+             ======================================================== -->
+        <div id="tab-personnel" class="gov-tab-panel active">
+          
+          <!-- Metric Grid for Personnel -->
+          <div class="metric-grid" style="margin-bottom: 1.5rem;">
+            <div class="metric-card">
+              <div class="metric-icon" style="color: var(--brass); background: var(--brass-subtle);"><i class="fa-solid fa-shield"></i></div>
+              <div class="metric-data">
+                <div class="label">Administrators</div>
+                <div class="value" id="count-admin">0</div>
+              </div>
+            </div>
+            <div class="metric-card">
+              <div class="metric-icon" style="color: var(--portal-info); background: var(--portal-info-bg);"><i class="fa-solid fa-medal"></i></div>
+              <div class="metric-data">
+                <div class="label">Officers &amp; Staff</div>
+                <div class="value" id="count-officers">0</div>
+              </div>
+            </div>
+            <div class="metric-card">
+              <div class="metric-icon" style="color: var(--portal-success); background: var(--portal-success-bg);"><i class="fa-solid fa-building-flag"></i></div>
+              <div class="metric-data">
+                <div class="label">Active Command Unit</div>
+                <div class="value" style="font-size: 1rem;">San Enrique ROTC Unit</div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Personnel Roster Card -->
+          <div class="card">
+            <div class="card-header" style="display:flex; justify-content:space-between; align-items:center;">
+              <div>
+                <h3>Active Command &amp; Officer Roster</h3>
+                <p style="font-size:0.8rem; color:var(--portal-muted);">Staff holding elevated privileges (Admin, Personnel, Platoon Leader).</p>
+              </div>
+              <div style="display:flex; align-items:center; gap:0.75rem; flex-wrap:wrap;">
+                <span id="personnel-count" class="badge badge-admin">0 Officers</span>
+                <a href="admin-create-officer.html" class="btn btn-primary" id="btn-create-officer-nav"
+                   style="display:inline-flex; align-items:center; gap:0.45rem; text-decoration:none; background:linear-gradient(135deg, #b88e2c, #dfb54e); border:none; color:#071209; font-weight:700; padding:0.5rem 1.1rem; border-radius:8px; font-size:0.85rem; box-shadow:0 4px 12px rgba(184,142,44,0.3); transition:all 0.2s;">
+                  <i class="fa-solid fa-user-plus"></i> + Create Officer Account
+                </a>
+              </div>
+            </div>
+
+            <div class="table-responsive">
+              <table class="data-table">
+                <thead>
+                  <tr>
+                    <th>Officer Name</th>
+                    <th>Rank / Title</th>
+                    <th>Position</th>
+                    <th>Assigned Unit</th>
+                    <th>Email</th>
+                    <th>Role Governance</th>
+                    <th style="text-align: right;">Action</th>
+                  </tr>
+                </thead>
+                <tbody id="personnel-tbody">
+                  <tr>
+                    <td colspan="7" style="text-align:center; padding:2rem; color:var(--portal-muted);">Loading personnel roster...</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <!-- ========================================================
+             TAB 2: ALL REGISTERED ACCOUNTS & ROLE GOVERNANCE
+             ======================================================== -->
+        <div id="tab-accounts" class="gov-tab-panel">
+
+          <!-- Filter Toolbar -->
+          <div class="filter-bar" style="margin-bottom:1rem; display:flex; gap:0.75rem; flex-wrap:wrap;">
+            <input type="text" id="acc-search" placeholder="Search registered cadets by name, student ID, email..." class="form-input search-input" oninput="renderAccountsTable()" style="flex:1; min-width:240px;">
+            <select id="acc-status-filter" class="form-select" onchange="renderAccountsTable()" style="min-width:160px;">
+              <option value="all">All Statuses</option>
+              <option value="approved">Approved</option>
+              <option value="pending">Pending</option>
+              <option value="under_review">Under Review</option>
+            </select>
+          </div>
+
+          <!-- Accounts Table Card -->
+          <div class="card">
+            <div class="card-header" style="display:flex; justify-content:space-between; align-items:center;">
+              <div>
+                <h3>Registered Cadets &amp; Account Governance</h3>
+                <p style="font-size:0.8rem; color:var(--portal-muted);">Promoting a cadet to Personnel or Administrator automatically transfers them to the ROTC Officers &amp; Personnel roster.</p>
+              </div>
+              <span id="acc-count" class="badge badge-admin">0 Cadets</span>
+            </div>
+
+            <div class="table-responsive">
+              <table class="data-table">
+                <thead>
+                  <tr>
+                    <th>User / Name</th>
+                    <th>Student ID</th>
+                    <th>Email</th>
+                    <th>Current Role</th>
+                    <th>Status</th>
+                    <th style="text-align: right;">Role Governance</th>
+                  </tr>
+                </thead>
+                <tbody id="acc-tbody">
+                  <tr>
+                    <td colspan="6" style="text-align:center; padding:2rem; color:var(--portal-muted);">Loading user accounts...</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <!-- ========================================================
+             TAB 4: OFFICER CLASSIFICATIONS & SCANNER PERMISSIONS
+             ======================================================== -->
+        <!-- ========================================================
+             TAB 3: ROLE PERMISSIONS MATRIX
+             ======================================================== -->
+        <div id="tab-matrix" class="gov-tab-panel">
+          <div class="card" style="padding:1.5rem;">
+            <div class="card-header" style="padding:0 0 1rem 0;">
+              <h3>Access Control &amp; Role Matrix</h3>
+              <p style="font-size:0.8rem; color:var(--portal-muted);">Official permissions mapped to institutional ROTC roles.</p>
+            </div>
+
+            <div class="table-responsive">
+              <table class="data-table">
+                <thead>
+                  <tr>
+                    <th>Capability / Feature</th>
+                    <th style="text-align:center;">Cadet</th>
+                    <th style="text-align:center;">Platoon Leader</th>
+                    <th style="text-align:center;">ROTC Personnel</th>
+                    <th style="text-align:center;">Administrator</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td><strong>View Personal Digital ID &amp; QR</strong></td>
+                    <td style="text-align:center; color:var(--portal-success);"><i class="fa-solid fa-check"></i></td>
+                    <td style="text-align:center; color:var(--portal-success);"><i class="fa-solid fa-check"></i></td>
+                    <td style="text-align:center; color:var(--portal-success);"><i class="fa-solid fa-check"></i></td>
+                    <td style="text-align:center; color:var(--portal-success);"><i class="fa-solid fa-check"></i></td>
+                  </tr>
+                  <tr>
+                    <td><strong>Download Doctrine &amp; Handbooks</strong></td>
+                    <td style="text-align:center; color:var(--portal-success);"><i class="fa-solid fa-check"></i></td>
+                    <td style="text-align:center; color:var(--portal-success);"><i class="fa-solid fa-check"></i></td>
+                    <td style="text-align:center; color:var(--portal-success);"><i class="fa-solid fa-check"></i></td>
+                    <td style="text-align:center; color:var(--portal-success);"><i class="fa-solid fa-check"></i></td>
+                  </tr>
+                  <tr>
+                    <td><strong>Scan Live Drill Attendance QR</strong></td>
+                    <td style="text-align:center; color:var(--portal-danger);"><i class="fa-solid fa-xmark"></i></td>
+                    <td style="text-align:center; color:var(--portal-success);"><i class="fa-solid fa-check"></i></td>
+                    <td style="text-align:center; color:var(--portal-success);"><i class="fa-solid fa-check"></i></td>
+                    <td style="text-align:center; color:var(--portal-success);"><i class="fa-solid fa-check"></i></td>
+                  </tr>
+                  <tr>
+                    <td><strong>Print Ledgers &amp; Export Reports</strong></td>
+                    <td style="text-align:center; color:var(--portal-danger);"><i class="fa-solid fa-xmark"></i></td>
+                    <td style="text-align:center; color:var(--portal-success);"><i class="fa-solid fa-check"></i></td>
+                    <td style="text-align:center; color:var(--portal-success);"><i class="fa-solid fa-check"></i></td>
+                    <td style="text-align:center; color:var(--portal-success);"><i class="fa-solid fa-check"></i></td>
+                  </tr>
+                  <tr>
+                    <td><strong>Review Cadet Enlistment Applications</strong></td>
+                    <td style="text-align:center; color:var(--portal-danger);"><i class="fa-solid fa-xmark"></i></td>
+                    <td style="text-align:center; color:var(--portal-danger);"><i class="fa-solid fa-xmark"></i></td>
+                    <td style="text-align:center; color:var(--portal-success);"><i class="fa-solid fa-check"></i></td>
+                    <td style="text-align:center; color:var(--portal-success);"><i class="fa-solid fa-check"></i></td>
+                  </tr>
+                  <tr>
+                    <td><strong>Publish Bulletins &amp; Post Lessons</strong></td>
+                    <td style="text-align:center; color:var(--portal-danger);"><i class="fa-solid fa-xmark"></i></td>
+                    <td style="text-align:center; color:var(--portal-danger);"><i class="fa-solid fa-xmark"></i></td>
+                    <td style="text-align:center; color:var(--portal-success);"><i class="fa-solid fa-check"></i></td>
+                    <td style="text-align:center; color:var(--portal-success);"><i class="fa-solid fa-check"></i></td>
+                  </tr>
+                  <tr>
+                    <td><strong>Assign Ranks &amp; Officer Appointments</strong></td>
+                    <td style="text-align:center; color:var(--portal-danger);"><i class="fa-solid fa-xmark"></i></td>
+                    <td style="text-align:center; color:var(--portal-danger);"><i class="fa-solid fa-xmark"></i></td>
+                    <td style="text-align:center; color:var(--portal-danger);"><i class="fa-solid fa-xmark"></i></td>
+                    <td style="text-align:center; color:var(--portal-success);"><i class="fa-solid fa-check"></i></td>
+                  </tr>
+                  <tr>
+                    <td><strong>User Role Elevation &amp; Account Approval</strong></td>
+                    <td style="text-align:center; color:var(--portal-danger);"><i class="fa-solid fa-xmark"></i></td>
+                    <td style="text-align:center; color:var(--portal-danger);"><i class="fa-solid fa-xmark"></i></td>
+                    <td style="text-align:center; color:var(--portal-danger);"><i class="fa-solid fa-xmark"></i></td>
+                    <td style="text-align:center; color:var(--portal-success);"><i class="fa-solid fa-check"></i></td>
+                  </tr>
+                  <tr>
+                    <td><strong>System Configuration &amp; Storage Management</strong></td>
+                    <td style="text-align:center; color:var(--portal-danger);"><i class="fa-solid fa-xmark"></i></td>
+                    <td style="text-align:center; color:var(--portal-danger);"><i class="fa-solid fa-xmark"></i></td>
+                    <td style="text-align:center; color:var(--portal-danger);"><i class="fa-solid fa-xmark"></i></td>
+                    <td style="text-align:center; color:var(--portal-success);"><i class="fa-solid fa-check"></i></td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+      </div><!-- /content-body -->
+    </main>
+  </div><!-- /portal-layout -->
+
+  <!-- ====== MODAL: EDIT OFFICER ASSIGNMENT ====== -->
+  <div id="modal-edit-personnel" class="modal-overlay">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h3 id="modal-officer-name">Edit Officer Assignment</h3>
+        <button class="modal-close" onclick="closeEditModal()">✕</button>
+      </div>
+      <form id="form-edit-personnel" onsubmit="handleSavePersonnel(event)">
+        <div class="modal-body">
+          <input type="hidden" id="edit-profile-id">
+
+          <div class="form-group">
+            <label class="form-label" for="edit-rank">Military Rank / Title *</label>
+            <input type="text" id="edit-rank" required class="form-input" placeholder="e.g. MS-IV, Cadet 1Lt, Staff Sergeant">
+          </div>
+
+          <div class="form-group">
+            <label class="form-label" for="edit-position">Appointment Position *</label>
+            <input type="text" id="edit-position" required class="form-input" placeholder="e.g. Platoon Leader, S1 Adjutant, Training NCO">
+          </div>
+
+          <div class="form-group">
+            <label class="form-label" for="edit-unit">Assigned Company / Unit</label>
+            <input type="text" id="edit-unit" class="form-input" placeholder="e.g. Alpha Company, 1st Platoon">
+          </div>
+
+          <div class="form-group">
+            <label class="form-label" for="edit-role-select">Role Governance</label>
+            <select id="edit-role-select" class="form-select" style="width: 100%;">
+              <option value="admin">Administrator (Full Access)</option>
+              <option value="personnel">ROTC Personnel (Elevated Staff)</option>
+              <option value="cadet">Cadet (Demote to Student Cadet)</option>
+            </select>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-outline" onclick="closeEditModal()">Cancel</button>
+          <button type="submit" class="btn btn-primary">Save Assignment</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+    <!-- ====== MODAL: ASSIGN OFFICER CLASSIFICATION ====== -->
+  <div id="modal-assign-officer" class="modal-overlay">
+    <div class="modal-content" style="max-width: 520px;">
+      <div class="modal-header">
+        <h3><i class="fa-solid fa-medal" style="color:var(--portal-brass); margin-right:0.4rem;"></i>Assign Officer Classification</h3>
+        <button class="modal-close" onclick="closeAssignOfficerModal()">✕</button>
+      </div>
+      <form id="form-assign-officer" onsubmit="handleSaveOfficerClassification(event)">
+        <div class="modal-body">
+          <input type="hidden" id="assign-officer-id">
+
+          <div class="form-group">
+            <label class="form-label" for="assign-cadet-select">Select Cadet Account *</label>
+            <select id="assign-cadet-select" required class="form-select" style="width:100%;">
+              <option value="" disabled selected>-- Choose a registered cadet --</option>
+            </select>
+            <p style="font-size:0.75rem; color:var(--portal-muted); margin:0.3rem 0 0 0;">
+              Cadet must already have a registered account in ROTCIMS.
+            </p>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label" for="assign-class-select">Officer Classification *</label>
+            <select id="assign-class-select" required class="form-select" style="width:100%;" onchange="onModalClassChange()">
+              <option value="advance_officer">🎖️ Advance Officers</option>
+              <option value="1st_class_officer">🥇 1st Class Officers</option>
+              <option value="2nd_class_officer">🥈 2nd Class Officers</option>
+              <option value="3rd_class_officer">🥉 3rd Class Officers</option>
+              <option value="4th_class_officer">🏅 4th Class Officers</option>
+            </select>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label" for="assign-pos-select">Assigned Officer Position</label>
+            <select id="assign-pos-select" class="form-select" style="width:100%;">
+              <option value="">-- None / General Staff --</option>
+            </select>
+            <p style="font-size:0.75rem; color:var(--portal-muted); margin:0.3rem 0 0 0;">
+              Allowed positions are dynamically filtered by the selected Officer Class.
+            </p>
+          </div>
+
+          <div class="form-group">
+            <label style="display:flex; align-items:center; gap:0.5rem; cursor:pointer; font-weight:600; font-size:0.9rem;">
+              <input type="checkbox" id="assign-is-active" checked style="accent-color:var(--portal-primary); width:18px; height:18px;">
+              <span>Mark as Active Officer (Eligible for Officers Only scanner sessions)</span>
+            </label>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label" for="assign-notes">Notes / Appointment Details</label>
+            <input type="text" id="assign-notes" class="form-input" placeholder="e.g. Promoted SY 2025-2026, Corps S3 Ops">
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-outline" onclick="closeAssignOfficerModal()">Cancel</button>
+          <button type="submit" class="btn btn-primary" id="btn-save-officer">Save Officer Classification</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- ====== JAVASCRIPT LOGIC ====== -->
+  <script>
+    let currentAdmin = null;
+    let personnelData = [];
+    let accountList = [];
+
+    document.addEventListener("DOMContentLoaded", async () => {
+      currentAdmin = await Auth.requireAuth(["admin"]);
+      if (!currentAdmin) return;
+
+      await Promise.all([loadPersonnel(), loadAccounts()]);
+    });
+
+    // ── Tab Switching ────────────────────────────────────────────────────
+    function switchGovTab(tabId, btn) {
+      document.querySelectorAll('.gov-tab-panel').forEach(p => p.classList.remove('active'));
+      document.querySelectorAll('.gov-tab-btn').forEach(b => b.classList.remove('active'));
+      document.getElementById(tabId).classList.add('active');
+      btn.classList.add('active');
+    }
+
+    // ── Load Personnel ───────────────────────────────────────────────────
+    async function loadPersonnel() {
+      const { data: profiles, error } = await window.supabaseClient
+        .from("profiles")
+        .select("id, user_id, first_name, last_name, student_id, email, phone, role, status, company, platoon")
+        .in("role", ["admin", "personnel", "platoon_leader"])
+        .order("role", { ascending: false });
+
+      if (error) {
+        console.error(error);
+        return;
+      }
+
+      const [{ data: extRecords }, { data: offClassRecords }] = await Promise.all([
+        window.supabaseClient.from("personnel").select("profile_id, rank, position, assigned_unit"),
+        window.supabaseClient.from("officer_classifications").select("profile_id, officer_class, officer_position, company, platoon, is_active").eq("is_active", true)
+      ]);
+
+      const extMap = new Map((extRecords || []).map(r => [r.profile_id, r]));
+      const offMap = new Map((offClassRecords || []).map(r => [r.profile_id, r]));
+
+      personnelData = (profiles || []).map(p => ({
+        ...p,
+        ext: extMap.get(p.id) || null,
+        officer_info: offMap.get(p.id) || null
+      }));
+
+      const admins = personnelData.filter(p => p.role === 'admin').length;
+      const officers = personnelData.filter(p => p.role !== 'admin').length;
+
+      document.getElementById("count-admin").textContent = admins;
+      document.getElementById("count-officers").textContent = officers;
+      document.getElementById("personnel-count").textContent = `${personnelData.length} Officers`;
+
+      const tbody = document.getElementById("personnel-tbody");
+      if (personnelData.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="7" style="text-align:center; padding:2rem; color:var(--portal-muted);">No officer accounts found.</td></tr>';
+        return;
+      }
+
+      tbody.innerHTML = personnelData.map(p => {
+        const ext = p.ext || {};
+        const off = p.officer_info || {};
+        const classLabel = off.officer_class && window.RBAC?.CLASS_LABELS ? window.RBAC.CLASS_LABELS[off.officer_class] : null;
+        const rank = classLabel || ext.rank || (p.role === 'admin' ? 'Commandant / Admin' : 'Cadet Officer');
+        const pos = off.officer_position || ext.position || (p.role === 'admin' ? 'System Administrator' : 'Duty Staff');
+        const unit = ext.assigned_unit || (off.company ? (off.company + ' / ' + (off.platoon || '--')) : (p.company || 'Headquarters'));
+
+        const isSelf = p.id === currentAdmin?.id;
+        return `
+          <tr>
+            <td>
+              <strong style="display:block; line-height:1.2;">${p.first_name} ${p.last_name}</strong>
+              <div style="font-size:0.72rem; color:var(--portal-muted); font-family:monospace; margin-top:2px;">${p.student_id || 'ID: Staff'}</div>
+            </td>
+            <td><span style="font-weight:600; color:var(--portal-brass); font-size:0.82rem;">${rank}</span></td>
+            <td style="font-size:0.82rem;">${pos}</td>
+            <td><span class="badge badge-admin table-unit-pill" title="${unit}">${unit}</span></td>
+            <td><div class="table-email-cell" title="${p.email}">${p.email}</div></td>
+            <td style="white-space:nowrap;">
+              <select onchange="changeRole('${p.id}', this.value)" ${isSelf ? 'disabled title="Active session administrator"' : ''} class="form-select" style="padding:0.28rem 0.55rem; font-size:0.76rem; border-radius:6px; border:1px solid var(--portal-border); background:var(--portal-card-bg); color:var(--portal-ink); font-weight:600; cursor:pointer;">
+                <option value="admin" ${p.role === 'admin' ? 'selected' : ''}>Administrator</option>
+                <option value="personnel" ${p.role === 'personnel' || p.role === 'platoon_leader' ? 'selected' : ''}>ROTC Personnel</option>
+                <option value="cadet">Demote to Cadet</option>
+              </select>
+            </td>
+            <td style="text-align:right;">
+              <button type="button" onclick="openEditModal('${p.id}')" class="btn btn-outline btn-sm" style="padding:0.3rem 0.65rem; font-size:0.78rem; gap:0.35rem; white-space:nowrap; cursor:pointer;">
+                <i class="fa-solid fa-pen-to-square"></i> Edit
+              </button>
+            </td>
+          </tr>
+        `;
+      }).join('');
+    }
+
+    // ── Personnel Modal ──────────────────────────────────────────────────
+    function openEditModal(profileId) {
+      const p = personnelData.find(x => x.id === profileId);
+      if (!p) {
+        console.warn("Officer not found for ID:", profileId);
+        return;
+      }
+
+      document.getElementById("edit-profile-id").value = p.id;
+      document.getElementById("modal-officer-name").textContent = `Edit Officer: ${p.first_name} ${p.last_name}`;
+
+      const ext = p.ext || {};
+      const off = p.officer_info || {};
+      document.getElementById("edit-rank").value = ext.rank || (p.role === 'admin' ? 'Commandant / Admin' : 'Cadet Officer');
+      document.getElementById("edit-position").value = off.officer_position || ext.position || (p.role === 'admin' ? 'System Administrator' : 'Duty Staff');
+      document.getElementById("edit-unit").value = ext.assigned_unit || (off.company ? (off.company + (off.platoon ? ' / ' + off.platoon : '')) : (p.company || 'Headquarters'));
+
+      const roleSelect = document.getElementById("edit-role-select");
+      if (roleSelect) {
+        roleSelect.value = p.role === 'admin' ? 'admin' : (p.role === 'cadet' ? 'cadet' : 'personnel');
+        roleSelect.disabled = (p.id === currentAdmin?.id);
+      }
+
+      const modal = document.getElementById("modal-edit-personnel");
+      if (modal) {
+        modal.classList.add("active");
+        modal.style.display = "flex";
+      }
+    }
+
+    function closeEditModal() {
+      const modal = document.getElementById("modal-edit-personnel");
+      if (modal) {
+        modal.classList.remove("active");
+        modal.style.display = "none";
+      }
+    }
+
+    async function handleSavePersonnel(e) {
+      e.preventDefault();
+      const profileId = document.getElementById("edit-profile-id").value;
+      const rank = document.getElementById("edit-rank").value.trim();
+      const position = document.getElementById("edit-position").value.trim();
+      const assigned_unit = document.getElementById("edit-unit").value.trim();
+      const newRole = document.getElementById("edit-role-select")?.value;
+
+      try {
+        const profileUpdates = { updated_at: new Date().toISOString() };
+        if (newRole) profileUpdates.role = newRole;
+        if (assigned_unit) profileUpdates.company = assigned_unit;
+
+        const { error: profErr } = await window.supabaseClient
+          .from("profiles")
+          .update(profileUpdates)
+          .eq("id", profileId);
+
+        if (profErr) throw profErr;
+
+        const { error: persErr } = await window.supabaseClient
+          .from("personnel")
+          .upsert({
+            profile_id: profileId,
+            rank,
+            position,
+            assigned_unit,
+            updated_at: new Date().toISOString()
+          }, { onConflict: "profile_id" });
+
+        if (persErr) throw persErr;
+
+        closeEditModal();
+        await Promise.all([loadPersonnel(), loadAccounts()]);
+      } catch (err) {
+        alert("Failed to save assignment: " + err.message);
+      }
+    }
+
+    // ── Load All Accounts ────────────────────────────────────────────────
+    async function loadAccounts() {
+      const { data, error } = await window.supabaseClient
+        .from("profiles")
+        .select("*")
+        .order("created_at", { ascending: false });
+
+      if (error) {
+        console.error(error);
+        return;
+      }
+      accountList = data || [];
+      renderAccountsTable();
+    }
+
+    function renderAccountsTable() {
+      const search = document.getElementById("acc-search").value.toLowerCase();
+      const statusFilterEl = document.getElementById("acc-status-filter");
+      const status = statusFilterEl ? statusFilterEl.value : "all";
+
+      // Filter: Cadets only in All Registered Accounts.
+      // Admin and Personnel automatically disappear from here and display in ROTC Officers & Personnel.
+      const filtered = accountList.filter(u => {
+        if (u.role === "admin" || u.role === "personnel" || u.role === "platoon_leader") {
+          return false;
+        }
+        const fullName = `${u.first_name || ''} ${u.last_name || ''}`.toLowerCase();
+        const email = (u.email || '').toLowerCase();
+        const sId = (u.student_id || '').toLowerCase();
+        const matchSearch = fullName.includes(search) || email.includes(search) || sId.includes(search);
+        const matchStatus = status === "all" || u.status === status;
+        return matchSearch && matchStatus;
+      });
+
+      document.getElementById("acc-count").textContent = `${filtered.length} Cadets`;
+      const tbody = document.getElementById("acc-tbody");
+
+      if (filtered.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="6" style="text-align:center; padding:2rem; color:var(--portal-muted);">No cadet accounts match filters.</td></tr>';
+        return;
+      }
+
+      tbody.innerHTML = filtered.map(u => {
+        const isSelf = u.id === currentAdmin.id;
+        return `
+          <tr>
+            <td>
+              <strong style="display:block; line-height:1.2;">${u.first_name} ${u.last_name}</strong>
+              ${isSelf ? '<span class="badge badge-admin" style="font-size: 0.65rem; margin-top:2px;">YOU</span>' : ''}
+            </td>
+            <td style="font-family: monospace; font-size:0.8rem;">${u.student_id || '---'}</td>
+            <td><div class="table-email-cell" title="${u.email}">${u.email}</div></td>
+            <td>
+              <span class="badge badge-cadet" style="font-size:0.7rem; padding:0.25rem 0.5rem;">CADET</span>
+            </td>
+            <td><span class="badge badge-${u.status}">${(u.status || 'pending').toUpperCase()}</span></td>
+            <td style="text-align: right; white-space: nowrap;">
+              <select onchange="changeRole('${u.id}', this.value)" ${isSelf ? 'disabled' : ''} class="form-select" style="padding: 0.28rem 0.55rem; font-size: 0.76rem; border-radius: 6px; border: 1px solid var(--portal-border); background: var(--portal-card-bg); color: var(--portal-ink); font-weight: 600; cursor: pointer;">
+                <option value="cadet" selected>Cadet</option>
+                <option value="personnel">Promote to ROTC Personnel</option>
+                <option value="admin">Promote to Administrator</option>
+              </select>
+              ${u.status !== 'approved' ? `<button onclick="approveUser('${u.id}')" class="btn btn-brass btn-sm" style="margin-left: 0.35rem; padding:0.26rem 0.55rem; font-size:0.75rem;">Approve</button>` : ''}
+            </td>
+          </tr>
+        `;
+      }).join('');
+    }
+
+    async function changeRole(profileId, newRole) {
+      const targetUser = accountList.find(u => u.id === profileId) || personnelData.find(p => p.id === profileId);
+      const userName = targetUser ? `${targetUser.first_name} ${targetUser.last_name}` : 'this account';
+
+      const promptMsg = (newRole === 'cadet')
+        ? `Are you sure you want to demote ${userName} to Cadet? They will be removed from ROTC Officers & Personnel and moved to Registered Cadets.`
+        : `Are you sure you want to promote ${userName} to ${newRole === 'admin' ? 'Administrator' : 'ROTC Personnel'}? They will immediately appear in the ROTC Officers & Personnel roster.`;
+
+      if (!confirm(promptMsg)) {
+        await Promise.all([loadAccounts(), loadPersonnel()]);
+        return;
+      }
+
+      const { error } = await window.supabaseClient
+        .from("profiles")
+        .update({ role: newRole, updated_at: new Date().toISOString() })
+        .eq("id", profileId);
+
+      if (error) {
+        alert("Error changing role: " + error.message);
+        return;
+      }
+
+      // If promoted to personnel or admin, ensure basic personnel record exists so they display properly in Tab 1
+      if (newRole === 'personnel' || newRole === 'admin') {
+        await window.supabaseClient.from("personnel").upsert({
+          profile_id: profileId,
+          rank: newRole === 'admin' ? 'Commandant / Admin' : 'Cadet Officer',
+          position: newRole === 'admin' ? 'System Administrator' : 'Duty Staff',
+          assigned_unit: 'Headquarters',
+          updated_at: new Date().toISOString()
+        }, { onConflict: "profile_id" });
+      }
+
+      // Reload both rosters: user immediately moves from one tab to the other!
+      await Promise.all([loadAccounts(), loadPersonnel()]);
+    }
+
+    async function approveUser(profileId) {
+      const { error } = await window.supabaseClient
+        .from("profiles")
+        .update({ status: "approved", updated_at: new Date().toISOString() })
+        .eq("id", profileId);
+
+      if (error) alert("Error approving user: " + error.message);
+      else await Promise.all([loadAccounts(), loadPersonnel()]);
+    }
+
+    // ══════════════════════════════════════════════════════════════════════
+    // OFFICER CLASSIFICATIONS & SCANNER PERMISSIONS LOGIC
+    // ══════════════════════════════════════════════════════════════════════
+    let officerData = [];
+
+    const OFFICER_CLASS_META = {
+      advance_officer: { label: 'Advance Officer', icon: '🎖️', badgeBg: 'rgba(34,197,94,0.15)', color: '#16a34a', border: 'rgba(34,197,94,0.3)' },
+      '1st_class_officer': { label: '1st Class Officer', icon: '🥇', badgeBg: 'rgba(217,119,6,0.15)', color: '#d97706', border: 'rgba(217,119,6,0.3)' },
+      '2nd_class_officer': { label: '2nd Class Officer', icon: '🥈', badgeBg: 'rgba(100,116,139,0.15)', color: '#475569', border: 'rgba(100,116,139,0.3)' },
+      '3rd_class_officer': { label: '3rd Class Officer', icon: '🥉', badgeBg: 'rgba(180,83,9,0.15)', color: '#b45309', border: 'rgba(180,83,9,0.3)' },
+      '4th_class_officer': { label: '4th Class Officer', icon: '🏅', badgeBg: 'rgba(37,99,235,0.15)', color: '#2563eb', border: 'rgba(37,99,235,0.3)' }
+    };
+
+    async function loadOfficerClassifications() {
+      try {
+        const { data, error } = await window.supabaseClient
+          .from("officer_classifications")
+          .select(`
+            id,
+            profile_id,
+            user_id,
+            officer_class,
+            officer_position,
+            company,
+            platoon,
+            is_active,
+            notes,
+            created_at,
+            profiles:profiles!profile_id (
+              id,
+              first_name,
+              last_name,
+              student_id,
+              email,
+              course,
+              company,
+              platoon
+            )
+          `)
+          .order("created_at", { ascending: false });
+
+        if (error) {
+          console.warn("officer_classifications query notice:", error.message);
+          const tbody = document.getElementById("officers-tbody");
+          if (tbody) {
+            tbody.innerHTML = `
+              <tr>
+                <td colspan="7" style="text-align:center; padding:2rem; color:var(--portal-muted);">
+                  <i class="fa-solid fa-triangle-exclamation" style="color:#f59e0b; margin-right:0.4rem;"></i>
+                  Officer Classifications table not detected yet. Please execute <code>sql/officer_scanner_permissions_migration.sql</code> in your Supabase SQL Editor.
+                </td>
+              </tr>
+            `;
+          }
+          return;
+        }
+
+        officerData = data || [];
+        updateOfficerMetrics();
+        renderOfficerTable();
+        populateCadetSelect();
+      } catch (err) {
+        console.error("loadOfficerClassifications error:", err);
+      }
+    }
+
+    function updateOfficerMetrics() {
+      const active = officerData.filter(o => o.is_active);
+      const advance = active.filter(o => o.officer_class === 'advance_officer').length;
+      const upper = active.filter(o => o.officer_class === '1st_class_officer' || o.officer_class === '2nd_class_officer').length;
+      const lower = active.filter(o => o.officer_class === '3rd_class_officer' || o.officer_class === '4th_class_officer').length;
+
+      const setEl = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val; };
+      setEl("count-active-officers", active.length);
+      setEl("count-advance-officers", advance);
+      setEl("count-upper-officers", upper);
+      setEl("count-lower-officers", lower);
+    }
+
+    function renderOfficerTable() {
+      const search = (document.getElementById("off-search")?.value || "").toLowerCase().trim();
+      const classFilter = document.getElementById("off-class-filter")?.value || "all";
+      const statusFilter = document.getElementById("off-status-filter")?.value || "all";
+
+      const filtered = officerData.filter(o => {
+        const p = o.profiles || {};
+        const fullName = `${p.first_name || ''} ${p.last_name || ''}`.toLowerCase();
+        const sId = (p.student_id || '').toLowerCase();
+        const notes = (o.notes || '').toLowerCase();
+
+        const matchSearch = !search || fullName.includes(search) || sId.includes(search) || notes.includes(search);
+        const matchClass = classFilter === 'all' || o.officer_class === classFilter;
+        const matchStatus = statusFilter === 'all' ||
+                            (statusFilter === 'active' && o.is_active) ||
+                            (statusFilter === 'inactive' && !o.is_active);
+
+        return matchSearch && matchClass && matchStatus;
+      });
+
+      const tbody = document.getElementById("officers-tbody");
+      if (!tbody) return;
+
+      if (filtered.length === 0) {
+        if (officerData.length === 0) {
+          tbody.innerHTML = `
+            <tr>
+              <td colspan="7" style="text-align:center; padding:2.5rem; color:var(--portal-muted);">
+                <i class="fa-solid fa-award" style="font-size:2rem; color:var(--portal-brass); margin-bottom:0.6rem; display:block;"></i>
+                <strong>No officer classifications assigned yet.</strong><br>
+                <span style="font-size:0.82rem; margin-top:0.35rem; display:inline-block;">Click <strong>Assign Officer Class</strong> above to classify a registered cadet into one of the 5 official categories.</span>
+              </td>
+            </tr>
+          `;
+        } else {
+          tbody.innerHTML = `
+            <tr>
+              <td colspan="7" style="text-align:center; padding:2rem; color:var(--portal-muted);">
+                No officer classifications found matching the current filters.
+              </td>
+            </tr>
+          `;
+        }
+        return;
+      }
+
+      tbody.innerHTML = filtered.map(o => {
+        const p = o.profiles || {};
+        const meta = OFFICER_CLASS_META[o.officer_class] || { label: o.officer_class, icon: '🎖️', badgeBg: '#eee', color: '#333', border: '#ccc' };
+        const createdDate = o.created_at ? new Date(o.created_at).toLocaleDateString() : '---';
+
+        return `
+          <tr>
+            <td>
+              <strong>${p.first_name || 'Cadet'} ${p.last_name || ''}</strong>
+              <div style="font-size:0.75rem; color:var(--portal-muted);">${p.course || ''} ${p.company ? '• ' + p.company : ''}</div>
+            </td>
+            <td style="font-family:monospace; font-weight:600;">${p.student_id || '---'}</td>
+            <td>
+              <select onchange="updateOfficerClass('${o.id}', this.value)" style="padding: 0.25rem 0.5rem; font-size: 0.78rem; font-weight: 700; border-radius: 6px; border: 1.5px solid var(--portal-border); background: var(--portal-card-bg); color: var(--portal-ink); cursor: pointer;">
+                <option value="advance_officer" ${o.officer_class === 'advance_officer' ? 'selected' : ''}>🎖️ Advance Officer</option>
+                <option value="1st_class_officer" ${o.officer_class === '1st_class_officer' ? 'selected' : ''}>🥇 1st Class Officer</option>
+                <option value="2nd_class_officer" ${o.officer_class === '2nd_class_officer' ? 'selected' : ''}>🥈 2nd Class Officer</option>
+                <option value="3rd_class_officer" ${o.officer_class === '3rd_class_officer' ? 'selected' : ''}>🥉 3rd Class Officer</option>
+                <option value="4th_class_officer" ${o.officer_class === '4th_class_officer' ? 'selected' : ''}>🏅 4th Class Officer</option>
+              </select>
+            </td>
+            <td>
+              <span class="badge ${o.is_active ? 'badge-approved' : 'badge-pending'}" style="cursor:pointer;" onclick="toggleOfficerActive('${o.id}', ${o.is_active})" title="Click to toggle status">
+                ${o.is_active ? 'ACTIVE' : 'INACTIVE'}
+              </span>
+            </td>
+            <td style="font-size:0.8rem; color:var(--portal-muted);">${createdDate}</td>
+            <td style="font-size:0.82rem; color:var(--portal-ink);">${o.notes || '<span style="color:var(--portal-muted); font-style:italic;">None</span>'}</td>
+            <td style="text-align:right;">
+              <button onclick="toggleOfficerActive('${o.id}', ${o.is_active})" class="btn btn-outline btn-sm" title="${o.is_active ? 'Deactivate' : 'Activate'}" style="margin-right:0.3rem;">
+                <i class="fa-solid ${o.is_active ? 'fa-user-slash' : 'fa-user-check'}"></i>
+              </button>
+              <button onclick="deleteOfficerClassification('${o.id}')" class="btn btn-outline btn-sm" style="color:var(--portal-danger); border-color:rgba(239,68,68,0.3);" title="Delete Assignment">
+                <i class="fa-solid fa-trash"></i>
+              </button>
+            </td>
+          </tr>
+        `;
+      }).join('');
+    }
+
+    function populateCadetSelect() {
+      const select = document.getElementById("assign-cadet-select");
+      if (!select) return;
+
+      const candidates = (accountList || []).filter(u => u.role !== 'admin');
+      select.innerHTML = '<option value="" disabled selected>-- Choose a registered cadet --</option>' +
+        candidates.map(c => `
+          <option value="${c.id}">
+            ${c.first_name} ${c.last_name} (${c.student_id || c.email || 'No ID'})
+          </option>
+        `).join('');
+    }
+
+    
+    function onModalClassChange() {
+      const cls = document.getElementById("assign-class-select")?.value;
+      const posSelect = document.getElementById("assign-pos-select");
+      if (!posSelect) return;
+      if (!window.RBAC) {
+        posSelect.innerHTML = '<option value="">-- None / General Staff --</option>';
+        return;
+      }
+      const allowed = window.RBAC.getPositionsForClass(cls);
+      posSelect.innerHTML = '<option value="">-- None / General Staff --</option>' +
+        allowed.map(p => `<option value="${p}">${p}</option>`).join('');
+    }
+
+    function openAssignOfficerModal() {
+      populateCadetSelect();
+      document.getElementById("assign-officer-id").value = "";
+      document.getElementById("assign-cadet-select").value = "";
+      document.getElementById("assign-class-select").value = "advance_officer";
+      document.getElementById("assign-is-active").checked = true;
+      document.getElementById("assign-notes").value = "";
+      onModalClassChange();
+      const modal = document.getElementById("modal-assign-officer");
+      if (modal) {
+        modal.classList.add("active");
+        modal.style.display = "flex";
+      }
+    }
+
+    function closeAssignOfficerModal() {
+      const modal = document.getElementById("modal-assign-officer");
+      if (modal) {
+        modal.classList.remove("active");
+        modal.style.display = "none";
+      }
+    }
+
+    async function handleSaveOfficerClassification(e) {
+      e.preventDefault();
+      const profileId = document.getElementById("assign-cadet-select").value;
+      const officerClass = document.getElementById("assign-class-select").value;
+      const isActive = document.getElementById("assign-is-active").checked;
+      const notes = document.getElementById("assign-notes").value.trim();
+      const position = document.getElementById("assign-pos-select")?.value || null;
+
+      if (!profileId) {
+        alert("Please select a cadet account.");
+        return;
+      }
+
+      const profile = accountList.find(a => a.id === profileId);
+      const userId = profile?.user_id || null;
+
+      const saveBtn = document.getElementById("btn-save-officer");
+      if (saveBtn) { saveBtn.disabled = true; saveBtn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Saving...'; }
+
+      try {
+        const payload = {
+          profile_id: profileId,
+          officer_class: officerClass,
+          officer_position: position,
+          is_active: isActive,
+          notes: notes || null,
+          assigned_by: currentAdmin?.id || null,
+          updated_at: new Date().toISOString()
+        };
+        if (userId) {
+          payload.user_id = userId;
+        }
+
+        const { error } = await window.supabaseClient
+          .from("officer_classifications")
+          .upsert(payload, { onConflict: "profile_id,officer_class" });
+
+        if (error) {
+          if (error.message && error.message.includes("user_id")) {
+            alert("Database notice: user_id must be nullable for offline/seeded cadets. Please execute this 1-line query in Supabase SQL Editor:\n\nALTER TABLE public.officer_classifications ALTER COLUMN user_id DROP NOT NULL;");
+          } else {
+            alert("Failed to assign officer classification: " + error.message);
+          }
+        } else {
+          closeAssignOfficerModal();
+          }
+      } catch (err) {
+        alert("Unexpected error: " + err.message);
+      } finally {
+        if (saveBtn) { saveBtn.disabled = false; saveBtn.innerHTML = 'Save Officer Classification'; }
+      }
+    }
+
+    async function updateOfficerClass(id, newClass) {
+      const { error } = await window.supabaseClient
+        .from("officer_classifications")
+        .update({ officer_class: newClass, updated_at: new Date().toISOString() })
+        .eq("id", id);
+
+      if (error) {
+        alert("Error updating class: " + error.message);
+      } else {
+        await Promise.all([loadPersonnel(), loadAccounts()]);
+      }
+    }
+
+    async function toggleOfficerActive(id, currentStatus) {
+      const nextStatus = !currentStatus;
+      const { error } = await window.supabaseClient
+        .from("officer_classifications")
+        .update({ is_active: nextStatus, updated_at: new Date().toISOString() })
+        .eq("id", id);
+
+      if (error) {
+        alert("Error updating status: " + error.message);
+      } else {
+        }
+    }
+
+    async function deleteOfficerClassification(id) {
+      if (!confirm("Are you sure you want to remove this officer classification?")) return;
+
+      const { error } = await window.supabaseClient
+        .from("officer_classifications")
+        .delete()
+        .eq("id", id);
+
+      if (error) {
+        alert("Error deleting classification: " + error.message);
+      } else {
+        }
+    }
+
+    window.addEventListener("click", (e) => {
+      const assignM = document.getElementById("modal-assign-officer");
+      if (e.target === assignM) closeAssignOfficerModal();
+      const editM = document.getElementById("modal-edit-personnel");
+      if (e.target === editM) closeEditModal();
+    });
+  </script>
+</body>
+</html>
