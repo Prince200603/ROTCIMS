@@ -688,12 +688,16 @@
       // 5. Setup keyboard shortcuts (/ to search, ESC to close modal)
       setupKeyboardShortcuts();
 
-      // 6. Fetch operational data
+      // 6. Fetch operational data (Immediate parallel rendering)
       try {
-        await syncMissingCadets();
-        await loadSessionFilter();
-        await loadCadets();
-        await loadRecords();
+        // Load sessions, cadets, and records concurrently so table and filters appear instantly
+        await Promise.all([
+          loadSessionFilter(),
+          loadCadets(),
+          loadRecords()
+        ]);
+        // Run missing cadets sync in the background so it never blocks the table!
+        syncMissingCadets().catch(err => console.warn("Background sync error:", err));
       } catch (err) {
         console.error("Initialization error:", err);
         showPortalToast("Error initializing records: " + err.message, "error");
@@ -864,28 +868,24 @@
     // ── DATABASE SYNC & SESSION RETRIEVAL ────────────────────────────────
     async function syncMissingCadets() {
       try {
-        const { data: profs } = await window.supabaseClient
-          .from("profiles")
-          .select("id, company, platoon, role")
-          .eq("role", "cadet");
+        // Fast background sync: fetch all cadets and profiles in 2 single batch queries
+        const [{ data: profs }, { data: existingCadets }] = await Promise.all([
+          window.supabaseClient.from("profiles").select("id, company").eq("role", "cadet"),
+          window.supabaseClient.from("cadets").select("profile_id")
+        ]);
 
         if (profs && profs.length > 0) {
-          for (const p of profs) {
-            const { data: existing } = await window.supabaseClient
-              .from("cadets")
-              .select("id")
-              .eq("profile_id", p.id)
-              .maybeSingle();
+          const existingProfileIds = new Set((existingCadets || []).map(c => c.profile_id));
+          const missing = profs.filter(p => !existingProfileIds.has(p.id));
 
-            if (!existing) {
-              await window.supabaseClient
-                .from("cadets")
-                .insert({
-                  profile_id: p.id,
-                  rotc_unit: p.company || "Alpha Company",
-                  rank: "Cadet"
-                });
-            }
+          if (missing.length > 0) {
+            const inserts = missing.map(p => ({
+              profile_id: p.id,
+              rotc_unit: p.company || "Alpha Company",
+              rank: "Cadet"
+            }));
+            // Insert in single batch instead of 370 sequential queries
+            await window.supabaseClient.from("cadets").insert(inserts);
           }
         }
       } catch (e) {
