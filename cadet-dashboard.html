@@ -97,7 +97,7 @@
           <li><a href="cadet-announcements.html"><i class="fa-solid fa-bullhorn"></i> Announcements</a></li>
           <li><a href="cadet-modules.html"><i class="fa-solid fa-book-open"></i> Learning Modules</a></li>
           <li><a href="#attendance-history"><i class="fa-solid fa-clipboard-check"></i> Attendance History</a></li>
-          <li><a href="#documents-section"><i class="fa-solid fa-folder-open"></i> Training Doctrine</a></li>
+          <li><a href="cadet-modules.html"><i class="fa-solid fa-folder-open"></i> Training Doctrine</a></li>
           <li><a href="cadet-profile.html"><i class="fa-solid fa-gear"></i> Settings</a></li>
         </ul>
       </nav>
@@ -286,26 +286,6 @@
 
         <!-- ====== DOCUMENT DOWNLOAD SECTION ====== -->
         <!-- id="documents-section" matches the sidebar anchor link. -->
-        <div class="card" id="documents-section">
-          <div class="card-header" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.75rem;">
-            <div>
-              <h2><i class="fa-solid fa-book-open" style="color: var(--brass-light); margin-right: 0.5rem;"></i>Training Modules &amp; Doctrine</h2>
-              <p style="font-size: 0.8rem; color: var(--slate);">Official ROTC handbooks, syllabus modules, Excel ledgers, and Word lesson documents.</p>
-            </div>
-            <a href="cadet-modules.html" class="btn btn-primary btn-sm" style="font-size: 0.82rem;">
-              <i class="fa-solid fa-arrow-up-right-from-square"></i> Open Full Modules Center ➔
-            </a>
-          </div>
-
-          <div class="card-body">
-            <div id="cadet-docs-grid" class="metric-grid" style="grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));">
-              <!-- Placeholder text shown while the document list is loading -->
-              <div style="text-align: center; padding: 1.5rem; color: var(--slate); grid-column: 1 / -1;">
-                <i class="fa-solid fa-spinner fa-spin"></i> Loading training modules &amp; documents...
-              </div>
-            </div>
-          </div>
-        </div>
 
       </div>
     </main>
@@ -375,12 +355,40 @@
             .from("attendance_records")
             .select(`
               id, status, scanned_at,
-              attendance_sessions ( title, session_date )
+              attendance_sessions ( id, title, session_date, status )
             `)
             .eq("cadet_id", actualCadetId)
             .order("scanned_at", { ascending: false });
 
           if (!error && data) records = data;
+
+          // ── ABSENT INJECTION: fetch all ENDED sessions ──────────────────
+          // For each session that has ended but the cadet has NO attendance
+          // record, inject a synthetic ABSENT row so the history is complete.
+          const { data: endedSessions } = await window.supabaseClient
+            .from("attendance_sessions")
+            .select("id, title, session_date, status")
+            .in("status", ["ended", "closed", "completed"]);
+
+          if (endedSessions && endedSessions.length > 0) {
+            const scannedSessionIds = new Set(records.map(r => r.attendance_sessions?.id).filter(Boolean));
+            const absentRows = endedSessions
+              .filter(s => !scannedSessionIds.has(s.id))
+              .map(s => ({
+                id: 'absent-' + s.id,
+                status: 'absent',
+                scanned_at: null,
+                attendance_sessions: { id: s.id, title: s.title, session_date: s.session_date }
+              }));
+            records = [...records, ...absentRows];
+            // Re-sort by date descending
+            records.sort((a, b) => {
+              const da = new Date(a.attendance_sessions?.session_date || a.scanned_at || 0);
+              const db = new Date(b.attendance_sessions?.session_date || b.scanned_at || 0);
+              return db - da;
+            });
+          }
+          // ────────────────────────────────────────────────────────────────
         }
 
         const tbody = document.getElementById("attendance-tbody");
@@ -389,16 +397,23 @@
           tbody.innerHTML = '<tr><td colspan="5" style="text-align: center; padding: 2rem; color: var(--slate);">No drill attendance records logged yet.</td></tr>';
         } else {
           tbody.innerHTML = records.map(r => {
-            const dateStr = r.attendance_sessions?.session_date || (r.scanned_at ? new Date(r.scanned_at).toLocaleDateString() : '---');
-            const timeStr = r.scanned_at ? new Date(r.scanned_at).toLocaleTimeString('en-PH', { hour12: false }) : (r.created_at ? new Date(r.created_at).toLocaleTimeString('en-PH', { hour12: false }) : '---');
+            const dateStr = r.attendance_sessions?.session_date
+              ? new Date(r.attendance_sessions.session_date).toLocaleDateString('en-PH', {year:'numeric',month:'short',day:'2-digit'})
+              : (r.scanned_at ? new Date(r.scanned_at).toLocaleDateString() : '---');
+            const timeStr = r.scanned_at
+              ? new Date(r.scanned_at).toLocaleTimeString('en-PH', { hour12: false })
+              : '---';
             const status = (r.status || 'present').toUpperCase();
+            const methodBadge = status === 'ABSENT'
+              ? '<span class="badge" style="background:rgba(239,68,68,0.15);color:#ef4444;">—</span>'
+              : '<span class="badge badge-admin">SCAN</span>';
 
             return `
               <tr>
                 <td><strong>${dateStr}</strong></td>
                 <td>${r.attendance_sessions?.title || 'Regular Drill Formation'}</td>
                 <td style="font-family: monospace;">${timeStr}</td>
-                <td><span class="badge badge-admin">scan</span></td>
+                <td>${methodBadge}</td>
                 <td><span class="badge badge-${status.toLowerCase()}">${status}</span></td>
               </tr>
             `;
