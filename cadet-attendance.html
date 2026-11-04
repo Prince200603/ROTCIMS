@@ -366,9 +366,12 @@
           // cadets who missed the formation are clearly marked ABSENT.
           const { data: allDbSessions } = await window.supabaseClient
             .from("attendance_sessions")
-            .select("id, title, session_date, is_open, status");
+            .select("id, title, session_date, is_open, status, end_time");
 
-          const todayIso = new Date().toISOString().split("T")[0];
+          const now = new Date();
+          const todayIso = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+          const currentTimeStr = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+
           const endedSessions = (allDbSessions || []).filter(s => {
             // Closed by admin switch
             if (s.is_open === false) return true;
@@ -376,6 +379,8 @@
             if (["ended", "closed", "completed"].includes(String(s.status || "").toLowerCase())) return true;
             // Session date is already in the past
             if (s.session_date && s.session_date < todayIso) return true;
+            // Session is today and formation end_time has passed
+            if (s.session_date && s.session_date === todayIso && s.end_time && currentTimeStr >= s.end_time.substring(0, 5)) return true;
             return false;
           });
 

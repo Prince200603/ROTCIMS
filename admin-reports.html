@@ -1003,7 +1003,41 @@
         return;
       }
 
-      reportData = (records || []).filter(r => {
+      // When a specific formation session is selected, ensure cadets who did not scan are included as ABSENT
+      let combinedRecords = records || [];
+      if (sess !== "all") {
+        try {
+          const { data: allCadets } = await window.supabaseClient
+            .from("cadets")
+            .select(`
+              id, profile_id, rank, company, platoon, rotc_unit, serial_number,
+              profiles ( id, first_name, last_name, student_id, course, section, company, platoon, rank )
+            `);
+
+          if (allCadets && allCadets.length > 0) {
+            const recordedCadetIds = new Set(combinedRecords.map(r => r.cadet_id || r.cadets?.id).filter(Boolean));
+            const sessObj = (sessions || []).find(s => s.id === sess);
+
+            const unscannedRows = allCadets
+              .filter(c => !recordedCadetIds.has(c.id))
+              .map(c => ({
+                id: 'unscanned-' + c.id,
+                session_id: sess,
+                cadet_id: c.id,
+                status: 'absent',
+                scanned_at: null,
+                attendance_sessions: sessObj ? { title: sessObj.title, session_date: sessObj.session_date } : null,
+                cadets: c
+              }));
+
+            combinedRecords = [...combinedRecords, ...unscannedRows];
+          }
+        } catch (cadetErr) {
+          console.warn("Could not load full cadet roster for absent merging:", cadetErr);
+        }
+      }
+
+      reportData = combinedRecords.filter(r => {
         const p = r.cadets?.profiles || {};
         const okComp = comp   === "all" || p.company === comp;
         const okPlt  = plt    === "all" || p.platoon === plt;

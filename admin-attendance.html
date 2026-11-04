@@ -262,10 +262,13 @@
                 </span>
               </div>
 
-              <!-- Session Action Group (Close, Edit, Delete) -->
+              <!-- Session Action Group (Close, Edit, Delete, Mark Absent) -->
               <div id="session-action-group" style="display: none; gap: 0.3rem;">
                 <button type="button" id="btn-att-toggle-open" onclick="toggleCurrentSessionOpen()" class="btn btn-sm btn-outline" title="Toggle Open/Closed status">
                   <i class="fa-solid fa-lock"></i> Close
+                </button>
+                <button type="button" id="btn-mark-unscanned-absent" onclick="markAllUnscannedAsAbsent()" class="btn btn-sm btn-outline" title="Record all unscanned cadets as ABSENT in Supabase" style="color: #f87171; border-color: rgba(239, 68, 68, 0.45);">
+                  <i class="fa-solid fa-user-xmark"></i> Mark Unscanned Absent
                 </button>
                 <button type="button" onclick="openEditCurrentSessionModal()" class="btn btn-sm btn-outline" title="Edit selected session details">
                   <i class="fa-solid fa-pen"></i> Edit
@@ -565,6 +568,11 @@
           <!-- Audio Beep Toggle -->
           <button type="button" class="scanner-btn-tool" id="btn-scanner-sound" onclick="toggleScannerSound()" title="Toggle Scan Beep Sound">
             <i class="fa-solid fa-volume-high"></i>
+          </button>
+
+          <!-- Mark Unscanned Absent Tool Button -->
+          <button type="button" class="scanner-btn-tool" onclick="markAllUnscannedAsAbsentFromScanner()" title="Mark Unscanned Cadets as Absent" style="color: #f87171 !important; border-color: rgba(239, 68, 68, 0.4) !important;">
+            <i class="fa-solid fa-user-xmark"></i> <span>Mark Absent</span>
           </button>
 
           <!-- Close Modal -->
@@ -1119,9 +1127,17 @@
         }
       });
 
+      // When an active session is selected, ensure all enrolled cadets are initialized in DB as ABSENT
+      if (targetSession && targetSession.is_open && allCadets.length > 0) {
+        const missingCadets = allCadets.filter(c => !recordsByCadetId.has(c.id));
+        if (missingCadets.length > 0) {
+          initializeSessionCadetsAsAbsent(targetSession.id);
+        }
+      }
+
       // 4. Combine ALL enrolled cadets so every cadet is displayed in the roster:
       //    - If scanned: status PRESENT or LATE with scan time
-      //    - If not scanned yet: status ABSENT
+      //    - If not scanned yet: initial status is ABSENT (permanently absent once closed)
       const fullRoster = allCadets.map(c => {
         const existingRecord = recordsByCadetId.get(c.id);
         const profile = c.profiles || {};
@@ -1131,15 +1147,18 @@
         const platoon = c.platoon || profile.platoon || '1st Platoon';
 
         if (existingRecord) {
-          const rawStatus = (existingRecord.status || 'present').toUpperCase();
-          const method = (existingRecord.remarks && existingRecord.remarks.toLowerCase().includes('manual')) ? 'MANUAL' : 'QR';
+          const rawStatus = (existingRecord.status || 'absent').toUpperCase();
+          const hasScanned = !!existingRecord.scanned_at;
+          const method = hasScanned
+            ? ((existingRecord.remarks && existingRecord.remarks.toLowerCase().includes('manual')) ? 'MANUAL' : 'QR')
+            : 'ABSENT';
           return {
             id: existingRecord.id,
             session_id: existingRecord.session_id || targetSession?.id,
             cadet_id: c.id,
             status: rawStatus,
-            scanned_at: existingRecord.scanned_at || existingRecord.created_at,
-            remarks: existingRecord.remarks || '',
+            scanned_at: existingRecord.scanned_at || null,
+            remarks: existingRecord.remarks || (hasScanned ? '' : 'Absent (Not scanned)'),
             attendance_sessions: existingRecord.attendance_sessions || targetSession,
             cadets: {
               id: c.id,
@@ -1153,14 +1172,14 @@
             method: method
           };
         } else {
-          // Cadet has not scanned in yet -> status is ABSENT
+          // Cadet initializing in database -> status is ABSENT
           return {
-            id: `unscanned-${c.id}`,
+            id: `init-${c.id}`,
             session_id: targetSession?.id || null,
             cadet_id: c.id,
             status: 'ABSENT',
             scanned_at: null,
-            remarks: 'Not yet scanned in',
+            remarks: 'Absent (Not scanned)',
             attendance_sessions: targetSession,
             cadets: {
               id: c.id,
@@ -1170,8 +1189,8 @@
               platoon: platoon,
               profiles: profile
             },
-            isRecorded: false,
-            method: 'UNSCANNED'
+            isRecorded: true,
+            method: 'ABSENT'
           };
         }
       });
@@ -1411,12 +1430,14 @@
         const isRecorded = !!r.isRecorded;
 
         let methodBadge = '';
-        if (!isRecorded || r.method === 'UNSCANNED') {
-          methodBadge = '<span class="badge" style="background: rgba(148,163,184,0.15); color: #94a3b8; border: 1px solid rgba(148,163,184,0.25);">UNSCANNED</span>';
-        } else if (r.method === 'MANUAL') {
-          methodBadge = '<span class="badge badge-warning">MANUAL</span>';
+        if (r.scanned_at) {
+          if (r.method === 'MANUAL') {
+            methodBadge = '<span class="badge badge-warning">MANUAL</span>';
+          } else {
+            methodBadge = '<span class="badge badge-admin"><i class="fa-solid fa-qrcode" style="margin-right: 3px;"></i>QR SCAN</span>';
+          }
         } else {
-          methodBadge = '<span class="badge badge-admin"><i class="fa-solid fa-qrcode" style="margin-right: 3px;"></i>QR</span>';
+          methodBadge = '<span class="badge" style="background: rgba(239, 68, 68, 0.12); color: #f87171; border: 1px solid rgba(239, 68, 68, 0.25);"><i class="fa-solid fa-user-xmark" style="margin-right: 3px;"></i>ABSENT</span>';
         }
 
         html += `
@@ -1462,9 +1483,9 @@
               </select>
             </td>
             <td style="text-align: right;">
-              ${isRecorded ? `
+              ${r.scanned_at ? `
                 <button type="button" class="btn btn-sm btn-outline" onclick="deleteAttendanceRecord('${r.id}', '${fullName}')" title="Reset to Absent" style="padding: 0.25rem 0.5rem; color: var(--portal-danger);">
-                  <i class="fa-solid fa-trash-can"></i>
+                  <i class="fa-solid fa-rotate-left"></i> Reset
                 </button>
               ` : `
                 <button type="button" class="btn btn-sm btn-brass" onclick="quickCheckInCadet('${r.cadet_id}', '${fullName}')" title="Quick check-in (Mark Present)" style="padding: 0.25rem 0.55rem; font-size: 0.72rem; white-space: nowrap;">
@@ -1541,7 +1562,7 @@
                   </div>
                 </div>
               </div>
-              <span class="badge ${isRecorded ? 'badge-admin' : ''}" style="${!isRecorded ? 'background: rgba(148,163,184,0.15); color: #94a3b8;' : ''}">${isRecorded ? (r.method || 'QR') : 'UNSCANNED'}</span>
+              <span class="badge ${r.scanned_at ? (r.method === 'MANUAL' ? 'badge-warning' : 'badge-admin') : ''}" style="${!r.scanned_at ? 'background: rgba(239,68,68,0.15); color: #f87171;' : ''}">${r.scanned_at ? (r.method || 'QR SCAN') : 'ABSENT'}</span>
             </div>
 
             <div style="margin: 0.75rem 0 0.5rem; font-size: 0.78rem; color: var(--portal-muted); display: flex; justify-content: space-between; align-items: center;">
@@ -1566,9 +1587,15 @@
       container.innerHTML = html;
     }
 
-    // Quick check-in for an unscanned cadet
+    // Quick check-in for a cadet
     async function quickCheckInCadet(cadetId, cadetName) {
-      await updateStatus(`unscanned-${cadetId}`, 'present', cadetId);
+      const currentSessionId = document.getElementById("filter-session")?.value;
+      const targetSession = allSessions.find(s => s.id === currentSessionId);
+      if (targetSession && targetSession.is_open === false) {
+        showPortalToast("Cannot check in: Session is CLOSED and attendance is permanently locked.", "warning");
+        return;
+      }
+      await updateStatus(`init-${cadetId}`, 'present', cadetId);
     }
 
     // ── STATUS UPDATER WITH OPTIMISTIC UI FEEDBACK ───────────────────────
@@ -1584,9 +1611,22 @@
         return;
       }
 
+      const targetSession = allSessions.find(s => s.id === targetSessionId);
+
       // Optimistic update in cache
       const item = cachedAttendanceRecords.find(r => r.id === recordId || (cadetId && r.cadet_id === cadetId));
       const prevStatus = item ? item.status : null;
+
+      if (targetSession && targetSession.is_open === false) {
+        const cadetName = item?.cadets?.profiles?.last_name || 'cadet';
+        if (!confirm(`Notice: Session "${targetSession.title}" is officially CLOSED and finalized.\n\nOverride and update ${cadetName}'s status to ${newStatus.toUpperCase()} anyway?`)) {
+          if (item && prevStatus) item.status = prevStatus;
+          updateKPIPillCounts();
+          filterAndRenderRecords();
+          return;
+        }
+      }
+
       if (item) item.status = dbStatus.toUpperCase();
 
       updateKPIPillCounts();
@@ -1594,16 +1634,22 @@
 
       try {
         let insErr = null;
+        const isTemporaryId = !recordId || recordId.startsWith('unscanned-') || recordId.startsWith('init-') || recordId.startsWith('temp-');
+        const nowScannedAt = (dbStatus === 'absent') ? null : new Date().toISOString();
 
         // If it's already an existing record in attendance_records table
-        if (recordId && !recordId.startsWith('unscanned-')) {
+        if (!isTemporaryId) {
           const { error } = await window.supabaseClient
             .from("attendance_records")
-            .update({ status: dbStatus })
+            .update({
+              status: dbStatus,
+              scanned_at: nowScannedAt,
+              remarks: `Status updated to ${dbStatus.toUpperCase()}`
+            })
             .eq("id", recordId);
           insErr = error;
         } else {
-          // It's a new check-in for an unscanned cadet: UPSERT to Supabase
+          // It's a new check-in or upsert to Supabase
           const targetCadetId = cadetId || (item ? item.cadet_id : null);
           if (!targetCadetId) throw new Error("Missing cadet ID for attendance record.");
 
@@ -1613,7 +1659,7 @@
               session_id: targetSessionId,
               cadet_id: targetCadetId,
               status: dbStatus,
-              scanned_at: new Date().toISOString(),
+              scanned_at: nowScannedAt,
               recorded_by: currentOfficer?.id || null,
               remarks: "Manual status update via roster"
             }, { onConflict: "session_id,cadet_id" })
@@ -1625,17 +1671,17 @@
             item.id = newRow.id;
             item.isRecorded = true;
             item.method = 'MANUAL';
-            item.scanned_at = new Date().toISOString();
+            item.scanned_at = nowScannedAt;
           }
         }
 
         // Retry uppercase if DB check constraint is uppercase
         if (insErr && insErr.message && insErr.message.includes("check constraint")) {
           const upStatus = dbStatus.toUpperCase();
-          if (recordId && !recordId.startsWith('unscanned-')) {
+          if (!isTemporaryId) {
             const retry = await window.supabaseClient
               .from("attendance_records")
-              .update({ status: upStatus })
+              .update({ status: upStatus, scanned_at: nowScannedAt })
               .eq("id", recordId);
             insErr = retry.error;
           } else {
@@ -1646,7 +1692,7 @@
                 session_id: targetSessionId,
                 cadet_id: targetCadetId,
                 status: upStatus,
-                scanned_at: new Date().toISOString(),
+                scanned_at: nowScannedAt,
                 recorded_by: currentOfficer?.id || null,
                 remarks: "Manual status update via roster"
               }, { onConflict: "session_id,cadet_id" })
@@ -1675,35 +1721,172 @@
       }
     }
 
-    // ── DELETE ATTENDANCE RECORD (RESETS TO ABSENT) ───────────────────────
+    // ── RESET ATTENDANCE RECORD TO ABSENT ───────────────────────────────
     async function deleteAttendanceRecord(recordId, cadetName) {
       if (!confirm(`Reset attendance for ${cadetName}? Their status will return to ABSENT.`)) return;
 
       try {
         const { error } = await window.supabaseClient
           .from("attendance_records")
-          .delete()
+          .update({
+            status: 'absent',
+            scanned_at: null,
+            remarks: 'Reset to Absent'
+          })
           .eq("id", recordId);
 
         if (error) throw error;
 
-        // Find in cache and reset to unscanned ABSENT
+        // Find in cache and reset to ABSENT
         const item = cachedAttendanceRecords.find(r => r.id === recordId);
         if (item) {
-          item.id = `unscanned-${item.cadet_id}`;
           item.status = 'ABSENT';
           item.scanned_at = null;
-          item.isRecorded = false;
-          item.method = 'UNSCANNED';
-          item.remarks = 'Not yet scanned in';
+          item.isRecorded = true;
+          item.method = 'ABSENT';
+          item.remarks = 'Reset to Absent';
         }
 
         updateKPIPillCounts();
         filterAndRenderRecords();
-        showPortalToast(`Attendance entry for ${cadetName} reset to ABSENT.`, "info");
+        showPortalToast(`Attendance for ${cadetName} reset to ABSENT.`, "info");
       } catch (err) {
         showPortalToast("Failed to reset record: " + err.message, "error");
       }
+    }
+
+    // ── INITIALIZE ALL CADETS AS ABSENT UPON SESSION CREATION / OPENING ───
+    async function initializeSessionCadetsAsAbsent(sessionId) {
+      if (!sessionId) return;
+      try {
+        if (!allCadets || allCadets.length === 0) {
+          await loadCadets();
+        }
+        if (!allCadets || allCadets.length === 0) return;
+
+        // Fetch existing records for this session
+        const { data: existingRecords, error: fetchErr } = await window.supabaseClient
+          .from("attendance_records")
+          .select("cadet_id")
+          .eq("session_id", sessionId);
+
+        if (fetchErr) {
+          console.warn("Check existing records note:", fetchErr);
+        }
+
+        const existingCadetIds = new Set((existingRecords || []).map(r => r.cadet_id));
+        const missingCadets = allCadets.filter(c => !existingCadetIds.has(c.id));
+
+        if (missingCadets.length === 0) return;
+
+        const payloads = missingCadets.map(c => ({
+          session_id: sessionId,
+          cadet_id: c.id,
+          status: 'absent',
+          scanned_at: null,
+          recorded_by: currentOfficer?.id || null,
+          remarks: 'Initial muster: Absent (Pending QR scan)'
+        }));
+
+        // Batch upsert in chunks of 50
+        for (let i = 0; i < payloads.length; i += 50) {
+          const chunk = payloads.slice(i, i + 50);
+          let { error: insErr } = await window.supabaseClient
+            .from("attendance_records")
+            .upsert(chunk, { onConflict: "session_id,cadet_id" });
+
+          if (insErr && insErr.message && insErr.message.includes("check constraint")) {
+            const upChunk = chunk.map(p => ({ ...p, status: 'ABSENT' }));
+            await window.supabaseClient
+              .from("attendance_records")
+              .upsert(upChunk, { onConflict: "session_id,cadet_id" });
+          }
+        }
+      } catch (err) {
+        console.warn("initializeSessionCadetsAsAbsent note:", err);
+      }
+    }
+
+    // ── BATCH MARK UNSCANNED CADETS AS ABSENT ────────────────────────────
+    async function markAllUnscannedAsAbsent(sessionId = null, promptUser = true) {
+      const sessFilter = sessionId || document.getElementById("filter-session")?.value;
+      const targetSessionId = (sessFilter && sessFilter !== "all")
+        ? sessFilter
+        : (allSessions.find(s => s.is_open)?.id || (allSessions.length > 0 ? allSessions[0].id : null));
+
+      if (!targetSessionId) {
+        showPortalToast("Please select a specific formation drill session first.", "warning");
+        return;
+      }
+
+      const sessionObj = allSessions.find(s => s.id === targetSessionId);
+      const sessionTitle = sessionObj?.title || "selected session";
+
+      // Make sure allCadets is loaded
+      if (!allCadets || allCadets.length === 0) {
+        await loadCadets();
+      }
+
+      // Find unscanned cadets
+      const unscanned = (cachedAttendanceRecords || []).filter(r => 
+        !r.isRecorded || (r.id && String(r.id).startsWith('unscanned-')) || r.method === 'UNSCANNED'
+      );
+
+      if (unscanned.length === 0) {
+        showPortalToast("All enrolled cadets are already recorded for this formation.", "info");
+        return;
+      }
+
+      if (promptUser) {
+        const confirmMsg = `Mark all ${unscanned.length} unscanned cadet(s) as ABSENT for "${sessionTitle}"?\n\nThis will officially record them as ABSENT in the database.`;
+        if (!confirm(confirmMsg)) return;
+      }
+
+      showPortalToast(`Recording ${unscanned.length} cadet(s) as ABSENT...`, "info");
+
+      try {
+        const payloads = unscanned.map(r => ({
+          session_id: targetSessionId,
+          cadet_id: r.cadet_id,
+          status: 'absent',
+          scanned_at: null,
+          recorded_by: currentOfficer?.id || null,
+          remarks: 'Did not scan - Marked Absent'
+        }));
+
+        // Batch upsert in chunks of 50 to avoid request size limits
+        for (let i = 0; i < payloads.length; i += 50) {
+          const chunk = payloads.slice(i, i + 50);
+          let { error: insErr } = await window.supabaseClient
+            .from("attendance_records")
+            .upsert(chunk, { onConflict: "session_id,cadet_id" });
+
+          if (insErr && insErr.message && insErr.message.includes("check constraint")) {
+            const upChunk = chunk.map(p => ({ ...p, status: 'ABSENT' }));
+            const retry = await window.supabaseClient
+              .from("attendance_records")
+              .upsert(upChunk, { onConflict: "session_id,cadet_id" });
+            if (retry.error) throw retry.error;
+          } else if (insErr) {
+            throw insErr;
+          }
+        }
+
+        showPortalToast(`Successfully marked ${unscanned.length} cadet(s) as ABSENT in the database.`, "success");
+        await loadRecords();
+      } catch (err) {
+        console.error("Batch mark absent error:", err);
+        showPortalToast("Failed to mark absent: " + err.message, "error");
+      }
+    }
+
+    async function markAllUnscannedAsAbsentFromScanner() {
+      const activeSess = document.getElementById("modal-scanner-session")?.value;
+      if (!activeSess) {
+        showPortalToast("No active formation session selected in scanner.", "warning");
+        return;
+      }
+      await markAllUnscannedAsAbsent(activeSess, true);
     }
 
     // ── EXPORT DROPDOWN TOGGLE ───────────────────────────────────────────
@@ -1793,7 +1976,8 @@
       document.getElementById("modal-att-session-title").textContent = "Create Formation Drill Session";
       document.getElementById("sess-edit-id").value = "";
       document.getElementById("sess-title").value = "";
-      document.getElementById("sess-date").value = new Date().toISOString().split('T')[0];
+      const _d = new Date();
+      document.getElementById("sess-date").value = `${_d.getFullYear()}-${String(_d.getMonth() + 1).padStart(2, '0')}-${String(_d.getDate()).padStart(2, '0')}`;
       document.getElementById("sess-location").value = "Grandstand Parade Grounds";
       document.getElementById("sess-start").value = "07:00";
       document.getElementById("sess-end").value = "12:00";
@@ -1835,20 +2019,39 @@
 
       const nextState = !session.is_open;
       const actionWord = nextState ? "OPEN" : "CLOSE";
-      if (!confirm(`Are you sure you want to ${actionWord} session "${session.title}"?`)) {
-        return;
+
+      if (!nextState) {
+        // Closing the session: confirm locking attendance
+        const unscanned = (cachedAttendanceRecords || []).filter(r => !r.scanned_at || (r.status || '').toUpperCase() === 'ABSENT');
+        const confirmMsg = `Are you sure you want to CLOSE session "${session.title}"?\n\nThis will PERMANENTLY finalize attendance. All ${unscanned.length} cadet(s) who did not scan will permanently remain ABSENT and the scanner will be locked.`;
+        if (!confirm(confirmMsg)) return;
+      } else {
+        if (!confirm(`Are you sure you want to OPEN session "${session.title}"?\n\nAll cadets will be initialized as ABSENT until they scan in.`)) {
+          return;
+        }
       }
 
       try {
         const { error } = await window.supabaseClient
           .from("attendance_sessions")
-          .update({ is_open: nextState })
+          .update({ is_open: nextState, status: nextState ? "active" : "closed" })
           .eq("id", session.id);
 
         if (error) throw error;
 
         session.is_open = nextState;
-        showPortalToast(`Session "${session.title}" is now ${nextState ? 'OPEN' : 'CLOSED'}.`, "success");
+        session.status = nextState ? "active" : "closed";
+
+        if (nextState) {
+          // Opened session: initialize all cadets as ABSENT in DB
+          showPortalToast("Session OPEN. Initializing all cadets as ABSENT...", "info");
+          await initializeSessionCadetsAsAbsent(session.id);
+        } else {
+          // Closed session: permanently seal all remaining unscanned cadets as ABSENT
+          await markAllUnscannedAsAbsent(session.id, false);
+          showPortalToast(`Session "${session.title}" CLOSED. Unscanned cadets are permanently ABSENT.`, "success");
+        }
+
         await loadSessionFilter();
         document.getElementById("filter-session").value = session.id;
         onFilterSessionChanged();
@@ -1911,6 +2114,8 @@
 
       try {
         let error = null;
+        let savedSessionId = editId;
+
         if (editId) {
           const res = await window.supabaseClient.from("attendance_sessions").update(fullPayload).eq("id", editId);
           error = res.error;
@@ -1921,22 +2126,31 @@
           }
         } else {
           fullPayload.created_by = currentOfficer?.id || null;
-          const res = await window.supabaseClient.from("attendance_sessions").insert(fullPayload).select();
+          const res = await window.supabaseClient.from("attendance_sessions").insert(fullPayload).select("id, is_open");
           error = res.error;
           if (error && (error.message.includes("end_time") || error.message.includes("location") || error.message.includes("status"))) {
             const basePayload = { title, session_date, is_open, created_by: currentOfficer?.id || null };
-            const retry = await window.supabaseClient.from("attendance_sessions").insert(basePayload).select();
+            const retry = await window.supabaseClient.from("attendance_sessions").insert(basePayload).select("id, is_open");
             error = retry.error;
+            savedSessionId = retry.data?.[0]?.id;
+          } else {
+            savedSessionId = res.data?.[0]?.id;
           }
         }
 
         if (error) throw error;
 
+        // If session is open, immediately initialize all cadets as ABSENT in DB
+        if (savedSessionId && is_open) {
+          showPortalToast("Session is OPEN: Initializing all cadets as ABSENT...", "info");
+          await initializeSessionCadetsAsAbsent(savedSessionId);
+        }
+
         showPortalToast(`Formation session ${editId ? 'updated' : 'created'} successfully!`, "success");
         closeModals();
         await loadSessionFilter();
-        if (editId) {
-          document.getElementById("filter-session").value = editId;
+        if (savedSessionId) {
+          document.getElementById("filter-session").value = savedSessionId;
           onFilterSessionChanged();
         }
       } catch (err) {
@@ -2156,17 +2370,26 @@
       const mainSess = document.getElementById("filter-session")?.value;
       const modalSess = document.getElementById("modal-scanner-session");
       if (modalSess) {
+        const preferredId = (mainSess && allSessions.some(s => s.id === mainSess && s.is_open))
+          ? mainSess
+          : ((allSessions.find(s => s.is_open) || allSessions[0])?.id || '');
+
         modalSess.innerHTML = (allSessions || []).map(s => `
-          <option value="${s.id}" ${s.id === mainSess ? 'selected' : ''}>
-            ${s.title} (${s.session_date})
+          <option value="${s.id}" ${s.id === preferredId ? 'selected' : ''}>
+            ${s.is_open ? '🟢' : '🔒 [CLOSED]'} ${s.title} (${s.session_date})
           </option>
         `).join('');
-        if (!modalSess.value && allSessions.length > 0) {
-          modalSess.value = allSessions[0].id;
+        if (preferredId) {
+          modalSess.value = preferredId;
         }
       }
 
-      showScannerFeedback("default", "Ready to Scan", "Align cadet digital QR badge within frame or choose file below.");
+      const activeSessionObj = (allSessions || []).find(s => s.id === modalSess?.value);
+      if (activeSessionObj && activeSessionObj.is_open === false) {
+        showScannerFeedback("error", "Formation Closed (Locked)", "This session has concluded and is CLOSED. Attendance is permanently locked.");
+      } else {
+        showScannerFeedback("default", "Ready to Scan", "Align cadet digital QR badge within frame or choose file below.");
+      }
       updateScannerPermissionBadge(modalSess?.value);
       await loadModalSessionScans();
       await startModalCamera();
@@ -2191,6 +2414,14 @@
     async function onModalScannerSessionChange() {
       const activeSess = document.getElementById("modal-scanner-session")?.value;
       updateScannerPermissionBadge(activeSess);
+      await loadModalSessionScans();
+      const activeSessionObj = (allSessions || []).find(s => s.id === activeSess);
+      if (activeSessionObj && activeSessionObj.is_open === false) {
+        showScannerFeedback("error", "Formation Closed (Locked)", "This session has concluded and is CLOSED. Attendance is permanently locked.");
+      } else {
+        showScannerFeedback("default", "Session Updated", "Scanning now records into the selected formation drill.");
+      }
+    }
       await loadModalSessionScans();
       showScannerFeedback("default", "Session Updated", "Scanning now records into the selected formation drill.");
     }
@@ -2243,22 +2474,39 @@
       showPortalToast(`Camera switched to ${currentCameraMode === "environment" ? "Back (Environment)" : "Front (User)"}`, "info");
     }
 
-    // Helper to calculate whether attendance is on-time or late
+    // Helper to calculate whether attendance is on-time or late based on session end_time
     function calculateAttendanceStatus(session, scanDate = new Date()) {
-      if (!session || !session.start_time) {
+      if (!session) {
         return 'PRESENT';
       }
+
+      // Check end_time for the cutoff. If no end_time is configured, cadet is marked PRESENT
+      const endTimeStr = session.end_time || null;
+      if (!endTimeStr) {
+        return 'PRESENT';
+      }
+
       try {
-        const timeParts = session.start_time.split(':');
-        const startHour = parseInt(timeParts[0], 10);
-        const startMinute = parseInt(timeParts[1] || '0', 10);
+        const timeParts = endTimeStr.split(':');
+        const endHour = parseInt(timeParts[0], 10);
+        const endMinute = parseInt(timeParts[1] || '0', 10);
+        const endSecond = parseInt(timeParts[2] || '0', 10);
 
-        // Build cutoff Date object based on session date or today's date
-        const sessionDateStr = session.session_date || scanDate.toISOString().split('T')[0];
-        const [year, month, day] = sessionDateStr.split('-').map(Number);
-        const cutoff = new Date(year, month - 1, day, startHour, startMinute, 0);
+        if (isNaN(endHour) || isNaN(endMinute)) {
+          return 'PRESENT';
+        }
 
-        // If scan is after formation start time, mark as LATE
+        // Build cutoff Date object based on scanDate's local day and session end_time
+        const cutoff = new Date(
+          scanDate.getFullYear(),
+          scanDate.getMonth(),
+          scanDate.getDate(),
+          endHour,
+          endMinute,
+          isNaN(endSecond) ? 0 : endSecond
+        );
+
+        // If scan is after formation end time, mark as LATE; otherwise PRESENT
         if (scanDate.getTime() > cutoff.getTime()) {
           return 'LATE';
         }
@@ -2479,6 +2727,17 @@
         return;
       }
 
+      // ── GUARD: Check if formation session is CLOSED ───────────────────
+      const currentSession = allSessions.find(s => s.id === sessionId);
+      if (currentSession && currentSession.is_open === false) {
+        playScannerBeep('error');
+        if (navigator.vibrate) navigator.vibrate([300, 100, 300]);
+        showScannerFeedback("error", "Formation Closed", "This session has been CLOSED. Attendance is locked and permanently finalized.");
+        showPortalToast("Session is CLOSED. Attendance is permanently locked and cannot be modified.", "error");
+        setTimeout(() => { isScannerLocked = false; }, 2200);
+        return;
+      }
+
       try {
         const rawText = (decodedText || '').trim();
         if (!rawText) throw new Error("Empty scan code.");
@@ -2551,7 +2810,7 @@
         const now = new Date();
         const timeString = now.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
 
-        // Calculate whether cadet is PRESENT or LATE based on session start_time
+        // Calculate whether cadet is PRESENT or LATE based on session end_time
         const currentSession = allSessions.find(s => s.id === sessionId);
         const scanStatus = calculateAttendanceStatus(currentSession, now); // 'PRESENT' or 'LATE'
         const isLate = (scanStatus === 'LATE');
@@ -2592,7 +2851,7 @@
         if (isLate) {
           playScannerBeep('warning');
           if (navigator.vibrate) navigator.vibrate([200, 100, 200]);
-          showScannerFeedback("warning", `LATE • ${cadetProfile.last_name}, ${cadetProfile.first_name}`, `${cadetProfile.student_id} • ${cadetProfile.company || 'Alpha'} • ${timeString} (Arrived past formation time)`);
+          showScannerFeedback("warning", `LATE • ${cadetProfile.last_name}, ${cadetProfile.first_name}`, `${cadetProfile.student_id} • ${cadetProfile.company || 'Alpha'} • ${timeString} (Arrived past formation end time)`);
         } else {
           playScannerBeep('success');
           if (navigator.vibrate) navigator.vibrate([100, 50, 100]);
@@ -2686,7 +2945,10 @@
 
         if (error) throw error;
 
-        modalScannedList = (records || []).map(r => {
+        // Only include cadets who have actually scanned in (Present, Late, Excused)
+        const scannedOnly = (records || []).filter(r => r.scanned_at || ['present', 'late', 'excused'].includes((r.status || '').toLowerCase()));
+
+        modalScannedList = scannedOnly.map(r => {
           const p = r.cadets?.profiles || {};
           const d = r.scanned_at ? new Date(r.scanned_at) : new Date();
           return {
