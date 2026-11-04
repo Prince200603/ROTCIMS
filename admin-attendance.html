@@ -1,4 +1,4 @@
-﻿<!--
+<!--
   ============================================================
   FILE: admin-attendance.html
   PURPOSE: Advanced Ultra-Clean Minimalist Glass & Modern Command
@@ -348,15 +348,15 @@
             <table class="data-table" id="attendance-data-table">
               <thead>
                 <tr>
-                  <th scope="col" style="min-width: 220px;">Cadet Profile</th>
-                  <th scope="col" style="min-width: 130px;">Student ID</th>
-                  <th scope="col" style="min-width: 140px;">Course &amp; Section</th>
+                  <th scope="col" style="min-width: 210px;">Cadet Profile</th>
+                  <th scope="col" style="min-width: 130px;">Designation</th>
+                  <th scope="col" style="min-width: 140px;">Assigned Company</th>
                   <th scope="col" style="min-width: 130px;">Platoon</th>
-                  <th scope="col" style="min-width: 180px;">Formation Session</th>
+                  <th scope="col" style="min-width: 130px;">Course &amp; Section</th>
                   <th scope="col" style="min-width: 110px;">Time-In</th>
-                  <th scope="col" style="min-width: 90px;">Method</th>
-                  <th scope="col" style="min-width: 140px;">Status (1-Click Change)</th>
-                  <th scope="col" style="text-align: right; min-width: 80px;">Actions</th>
+                  <th scope="col" style="min-width: 95px;">Method</th>
+                  <th scope="col" style="min-width: 145px;">Status (1-Click Change)</th>
+                  <th scope="col" style="text-align: right; min-width: 95px;">Actions</th>
                 </tr>
               </thead>
               <tbody id="attendance-tbody">
@@ -885,9 +885,12 @@
     // ── DATABASE SYNC & SESSION RETRIEVAL ────────────────────────────────
     async function syncMissingCadets() {
       try {
-        // Fast background sync: fetch all cadets and profiles in 2 single batch queries
+        // Fast background sync: ensure all cadets in profiles table have a matching cadets table row
         const [{ data: profs }, { data: existingCadets }] = await Promise.all([
-          window.supabaseClient.from("profiles").select("id, company").eq("role", "cadet"),
+          window.supabaseClient
+            .from("profiles")
+            .select("id, company, platoon, rank, emergency_contact_name, emergency_contact_relationship, emergency_contact_phone")
+            .eq("role", "cadet"),
           window.supabaseClient.from("cadets").select("profile_id")
         ]);
 
@@ -896,13 +899,30 @@
           const missing = profs.filter(p => !existingProfileIds.has(p.id));
 
           if (missing.length > 0) {
+            console.log(`Auto-syncing ${missing.length} missing cadets rows...`);
             const inserts = missing.map(p => ({
               profile_id: p.id,
-              rotc_unit: p.company || "Alpha Company",
-              rank: "Cadet"
+              rotc_unit: p.company ? `${p.company} Company` : "San Enrique ROTC Unit",
+              company: p.company || "Alpha",
+              platoon: p.platoon || "1st Platoon",
+              rank: p.rank || "Cadet Private",
+              emergency_contact_name: p.emergency_contact_name || "Emergency Contact",
+              emergency_contact_relationship: p.emergency_contact_relationship || "Parent/Guardian",
+              emergency_contact_phone: p.emergency_contact_phone || "09000000000",
+              enlistment_date: new Date().toISOString().split('T')[0]
             }));
-            // Insert in single batch instead of 370 sequential queries
-            await window.supabaseClient.from("cadets").insert(inserts);
+
+            const { error: batchErr } = await window.supabaseClient.from("cadets").insert(inserts);
+            if (batchErr) {
+              console.warn("Full batch insert error, retrying minimal fields:", batchErr);
+              const minInserts = missing.map(p => ({
+                profile_id: p.id,
+                rotc_unit: p.company || "Alpha Company",
+                rank: "Cadet Private"
+              }));
+              await window.supabaseClient.from("cadets").insert(minInserts);
+            }
+            await loadCadets();
           }
         }
       } catch (e) {
@@ -922,9 +942,18 @@
       const selMan = document.getElementById("man-session");
 
       if (allSessions && allSessions.length > 0) {
-        selFilter.innerHTML = '<option value="all">All Formation Sessions</option>' +
-          allSessions.map(s => `<option value="${s.id}">${s.is_open ? '🟢' : '⚪'} ${s.title} (${s.session_date})</option>`).join('');
+        // Auto-select open session by default, or most recent session
+        const openSession = allSessions.find(s => s.is_open);
+        const defaultSessionId = openSession ? openSession.id : allSessions[0].id;
+        const currentVal = selFilter?.value;
+        const selectedId = (currentVal && currentVal !== 'all' && allSessions.some(s => s.id === currentVal))
+          ? currentVal
+          : defaultSessionId;
 
+        selFilter.innerHTML = '<option value="all">All Formation Sessions</option>' +
+          allSessions.map(s => `<option value="${s.id}" ${s.id === selectedId ? 'selected' : ''}>${s.is_open ? '🟢' : '⚪'} ${s.title} (${s.session_date})</option>`).join('');
+
+        if (selFilter) selFilter.value = selectedId;
         selMan.innerHTML = allSessions.map(s => `<option value="${s.id}">${s.title} (${s.session_date})</option>`).join('');
       } else {
         selFilter.innerHTML = '<option value="all">No Sessions Created</option>';
@@ -996,8 +1025,8 @@
       const { data: cadetRows, error } = await window.supabaseClient
         .from("cadets")
         .select(`
-          id, profile_id,
-          profiles ( first_name, last_name, student_id, course, section )
+          id, profile_id, rank, company, platoon, rotc_unit, serial_number,
+          profiles ( id, first_name, last_name, student_id, course, section, company, platoon, rank, role )
         `);
 
       if (!error && cadetRows && cadetRows.length > 0) {
@@ -1005,13 +1034,16 @@
       } else {
         const { data: profs } = await window.supabaseClient
           .from("profiles")
-          .select("id, first_name, last_name, student_id, course, section")
+          .select("id, first_name, last_name, student_id, course, section, company, platoon, rank, role")
           .eq("role", "cadet")
           .order("last_name", { ascending: true });
 
         allCadets = (profs || []).map(p => ({
           id: p.id,
           profile_id: p.id,
+          rank: p.rank || 'Cadet Private',
+          company: p.company || 'Alpha Company',
+          platoon: p.platoon || '1st Platoon',
           profiles: p
         }));
       }
@@ -1029,23 +1061,47 @@
       }
     }
 
-    // ── ATTENDANCE RECORDS RETRIEVAL ─────────────────────────────────────
+    // ── ATTENDANCE RECORDS RETRIEVAL (SHOWS ALL CADETS IN ROSTER) ─────────
     async function loadRecords() {
       const sessFilter = document.getElementById("filter-session")?.value || "all";
 
+      // 1. Ensure allCadets is loaded
+      if (!allCadets || allCadets.length === 0) {
+        await loadCadets();
+      }
+
+      // Determine active target session object
+      let targetSession = null;
+      if (sessFilter !== "all") {
+        targetSession = allSessions.find(s => s.id === sessFilter);
+        if (!targetSession) {
+          const { data: sData } = await window.supabaseClient
+            .from("attendance_sessions")
+            .select("id, title, session_date, is_open, start_time, end_time, location, allowed_scanner_type")
+            .eq("id", sessFilter)
+            .maybeSingle();
+          targetSession = sData;
+        }
+      } else if (allSessions.length > 0) {
+        targetSession = allSessions.find(s => s.is_open) || allSessions[0];
+      }
+
+      // 2. Query recorded attendance for the session
       let query = window.supabaseClient
         .from("attendance_records")
         .select(`
-          id, session_id, cadet_id, status, scanned_at, remarks,
-          attendance_sessions ( id, title, session_date ),
+          id, session_id, cadet_id, status, scanned_at, remarks, created_at,
+          attendance_sessions ( id, title, session_date, start_time, end_time ),
           cadets (
-            id, profile_id,
-            profiles ( first_name, last_name, student_id, course, section, company, platoon )
+            id, profile_id, rank, company, platoon, rotc_unit, serial_number,
+            profiles ( id, first_name, last_name, student_id, course, section, company, platoon, rank )
           )
         `)
         .order("scanned_at", { ascending: false });
 
-      if (sessFilter !== "all") query = query.eq("session_id", sessFilter);
+      if (sessFilter !== "all") {
+        query = query.eq("session_id", sessFilter);
+      }
 
       const { data: records, error } = await query;
       if (error) {
@@ -1053,7 +1109,74 @@
         console.error("Error loading attendance records:", error);
       }
 
-      cachedAttendanceRecords = records || [];
+      const rawRecords = records || [];
+
+      // 3. Map recorded entries by cadet_id
+      const recordsByCadetId = new Map();
+      rawRecords.forEach(r => {
+        if (!recordsByCadetId.has(r.cadet_id)) {
+          recordsByCadetId.set(r.cadet_id, r);
+        }
+      });
+
+      // 4. Combine ALL enrolled cadets so every cadet is displayed in the roster:
+      //    - If scanned: status PRESENT or LATE with scan time
+      //    - If not scanned yet: status ABSENT
+      const fullRoster = allCadets.map(c => {
+        const existingRecord = recordsByCadetId.get(c.id);
+        const profile = c.profiles || {};
+
+        const rank = c.rank || profile.rank || 'Cadet Private';
+        const company = c.company || profile.company || c.rotc_unit || 'Alpha Company';
+        const platoon = c.platoon || profile.platoon || '1st Platoon';
+
+        if (existingRecord) {
+          const rawStatus = (existingRecord.status || 'present').toUpperCase();
+          const method = (existingRecord.remarks && existingRecord.remarks.toLowerCase().includes('manual')) ? 'MANUAL' : 'QR';
+          return {
+            id: existingRecord.id,
+            session_id: existingRecord.session_id || targetSession?.id,
+            cadet_id: c.id,
+            status: rawStatus,
+            scanned_at: existingRecord.scanned_at || existingRecord.created_at,
+            remarks: existingRecord.remarks || '',
+            attendance_sessions: existingRecord.attendance_sessions || targetSession,
+            cadets: {
+              id: c.id,
+              profile_id: c.profile_id,
+              rank: rank,
+              company: company,
+              platoon: platoon,
+              profiles: profile
+            },
+            isRecorded: true,
+            method: method
+          };
+        } else {
+          // Cadet has not scanned in yet -> status is ABSENT
+          return {
+            id: `unscanned-${c.id}`,
+            session_id: targetSession?.id || null,
+            cadet_id: c.id,
+            status: 'ABSENT',
+            scanned_at: null,
+            remarks: 'Not yet scanned in',
+            attendance_sessions: targetSession,
+            cadets: {
+              id: c.id,
+              profile_id: c.profile_id,
+              rank: rank,
+              company: company,
+              platoon: platoon,
+              profiles: profile
+            },
+            isRecorded: false,
+            method: 'UNSCANNED'
+          };
+        }
+      });
+
+      cachedAttendanceRecords = fullRoster;
       updateKPIPillCounts();
       filterAndRenderRecords();
     }
@@ -1074,11 +1197,12 @@
       setEl("mob-stat-excused", excusedCount);
       setEl("mob-stat-absent",  absentCount);
 
-      // Calculate attendance percentage
+      // Calculate attendance percentage based on active presence (Present + Late)
       const pctEl = document.getElementById("kpi-present-pct");
       if (pctEl) {
-        const pct = allCount > 0 ? Math.round((presentCount / allCount) * 100) : 0;
-        pctEl.innerHTML = `<i class="fa-solid fa-chart-line"></i> ${pct}% attendance rate`;
+        const turnout = presentCount + lateCount;
+        const pct = allCount > 0 ? Math.round((turnout / allCount) * 100) : 0;
+        pctEl.innerHTML = `<i class="fa-solid fa-chart-line"></i> ${pct}% turnout (${turnout}/${allCount} scanned)`;
       }
     }
 
@@ -1098,8 +1222,9 @@
       // Company filter
       if (activeCompanyFilter && activeCompanyFilter !== 'all') {
         filtered = filtered.filter(r => {
-          const profile = r.cadets?.profiles || {};
-          const comp = (profile.company || r.cadets?.rotc_unit || '').toLowerCase();
+          const c = r.cadets || {};
+          const p = c.profiles || {};
+          const comp = (c.company || p.company || c.rotc_unit || '').toLowerCase();
           return comp.includes(activeCompanyFilter.toLowerCase());
         });
       }
@@ -1107,27 +1232,34 @@
       // Platoon filter
       if (activePlatoonFilter && activePlatoonFilter !== 'all') {
         filtered = filtered.filter(r => {
-          const profile = r.cadets?.profiles || {};
-          return (profile.platoon || '').toLowerCase().includes(activePlatoonFilter.toLowerCase());
+          const c = r.cadets || {};
+          const p = c.profiles || {};
+          const plt = (c.platoon || p.platoon || '').toLowerCase();
+          return plt.includes(activePlatoonFilter.toLowerCase());
         });
       }
 
       // Text search
       if (search) {
         filtered = filtered.filter(r => {
-          const profile = r.cadets?.profiles || {};
-          const name = `${profile.first_name || ''} ${profile.last_name || ''}`.toLowerCase();
-          const sid = (profile.student_id || '').toLowerCase();
+          const c = r.cadets || {};
+          const p = c.profiles || {};
+          const name = `${p.first_name || ''} ${p.last_name || ''}`.toLowerCase();
+          const sid = (p.student_id || '').toLowerCase();
           const sess = (r.attendance_sessions?.title || '').toLowerCase();
-          const course = (profile.course || '').toLowerCase();
-          const section = (profile.section || '').toLowerCase();
-          const platoon = (profile.platoon || '').toLowerCase();
-          return name.includes(search) || sid.includes(search) || sess.includes(search) || course.includes(search) || section.includes(search) || platoon.includes(search);
+          const course = (p.course || '').toLowerCase();
+          const section = (p.section || '').toLowerCase();
+          const platoon = (c.platoon || p.platoon || '').toLowerCase();
+          const comp = (c.company || p.company || '').toLowerCase();
+          const rank = (c.rank || p.rank || '').toLowerCase();
+          return name.includes(search) || sid.includes(search) || sess.includes(search) ||
+                 course.includes(search) || section.includes(search) || platoon.includes(search) ||
+                 comp.includes(search) || rank.includes(search);
         });
       }
 
       const countEl = document.getElementById("record-count");
-      if (countEl) countEl.textContent = `${filtered.length} Records`;
+      if (countEl) countEl.textContent = `${filtered.length} Cadets`;
 
       renderDesktopAttendance(filtered);
       renderMobileAttendanceCards(filtered);
@@ -1142,7 +1274,27 @@
       filterAndRenderRecords();
     }
 
-    // ── DESKTOP TABLE RENDERER (WITH INLINE 1-CLICK STATUS SELECTOR) ─────
+    // Format helpers
+    function cleanCompanyDisplay(comp) {
+      if (!comp) return 'Alpha Company';
+      const c = comp.trim();
+      if (/company|unit|ghq|headquarters/i.test(c)) return c;
+      return `${c} Company`;
+    }
+
+    function cleanPlatoonDisplay(plt) {
+      if (!plt) return '1st Platoon';
+      const p = plt.trim();
+      if (/platoon/i.test(p)) return p;
+      return `${p} Platoon`;
+    }
+
+    function cleanDesignationDisplay(rank) {
+      if (!rank) return 'Cadet Private';
+      return rank.trim();
+    }
+
+    // ── DESKTOP TABLE RENDERER: GROUPED BY COMPANY & PLATOON ────────────
     function renderDesktopAttendance(records) {
       const tbody = document.getElementById("attendance-tbody");
       if (!tbody) return;
@@ -1152,31 +1304,123 @@
           <tr>
             <td colspan="9" style="text-align: center; padding: 3rem 1.5rem; color: var(--portal-muted);">
               <i class="fa-solid fa-clipboard-question" style="font-size: 2.2rem; color: var(--portal-brass); margin-bottom: 0.65rem; display: block;"></i>
-              <div style="font-weight: 700; font-size: 1rem; color: var(--portal-ink);">No attendance records found</div>
-              <div style="font-size: 0.82rem; margin-top: 0.25rem;">Try adjusting your search criteria, formation session, or status filters.</div>
+              <div style="font-weight: 700; font-size: 1rem; color: var(--portal-ink);">No cadets found for current filter</div>
+              <div style="font-size: 0.82rem; margin-top: 0.25rem;">Try adjusting your company, platoon, or status filter.</div>
             </td>
           </tr>
         `;
         return;
       }
 
-      tbody.innerHTML = records.map(r => {
+      // Sort by Company order, then Platoon order, then Cadet Last Name
+      const compSortWeight = { 'alpha': 1, 'bravo': 2, 'charlie': 3, 'delta': 4, 'medics': 5, 'ghq': 6 };
+      const pltSortWeight  = { '1st': 1, '2nd': 2, '3rd': 3, 'hq': 4, 'headquarters': 4 };
+
+      const sorted = [...records].sort((a, b) => {
+        const cA = cleanCompanyDisplay(a.cadets?.company || a.cadets?.profiles?.company).toLowerCase();
+        const cB = cleanCompanyDisplay(b.cadets?.company || b.cadets?.profiles?.company).toLowerCase();
+
+        let wCA = 99, wCB = 99;
+        for (const [k, v] of Object.entries(compSortWeight)) {
+          if (cA.includes(k)) { wCA = v; break; }
+        }
+        for (const [k, v] of Object.entries(compSortWeight)) {
+          if (cB.includes(k)) { wCB = v; break; }
+        }
+        if (wCA !== wCB) return wCA - wCB;
+
+        const pA = cleanPlatoonDisplay(a.cadets?.platoon || a.cadets?.profiles?.platoon).toLowerCase();
+        const pB = cleanPlatoonDisplay(b.cadets?.platoon || b.cadets?.profiles?.platoon).toLowerCase();
+
+        let wPA = 99, wPB = 99;
+        for (const [k, v] of Object.entries(pltSortWeight)) {
+          if (pA.includes(k)) { wPA = v; break; }
+        }
+        for (const [k, v] of Object.entries(pltSortWeight)) {
+          if (pB.includes(k)) { wPB = v; break; }
+        }
+        if (wPA !== wPB) return wPA - wPB;
+
+        const nameA = (a.cadets?.profiles?.last_name || '').toLowerCase();
+        const nameB = (b.cadets?.profiles?.last_name || '').toLowerCase();
+        return nameA.localeCompare(nameB);
+      });
+
+      let currentGroupKey = null;
+      let html = '';
+
+      sorted.forEach(r => {
         const profile = r.cadets?.profiles || {};
         const first = profile.first_name || '';
         const last = profile.last_name || '';
         const initials = ((first[0] || '') + (last[0] || 'C')).toUpperCase();
         const fullName = `${last ? last + ', ' : ''}${first}`.trim() || 'Cadet';
         const studentId = profile.student_id || '---';
+        const designation = cleanDesignationDisplay(r.cadets?.rank || profile.rank);
+        const companyName = cleanCompanyDisplay(r.cadets?.company || profile.company);
+        const platoonName = cleanPlatoonDisplay(r.cadets?.platoon || profile.platoon);
         const courseSec = `${profile.course || ''} ${profile.section || ''}`.trim() || 'ROTC';
-        const platoon = profile.platoon || 'Unassigned';
-        const sessionTitle = r.attendance_sessions?.title || 'Drill Session';
-        const sessionDate = r.attendance_sessions?.session_date ? `(${r.attendance_sessions.session_date})` : '';
-        const timeIn = r.scanned_at ? new Date(r.scanned_at).toLocaleTimeString('en-PH', { hour12: false }) : (r.created_at ? new Date(r.created_at).toLocaleTimeString('en-PH', { hour12: false }) : '---');
-        const status = (r.status || 'present').toUpperCase();
-        const method = r.remarks && r.remarks.toLowerCase().includes('manual') ? 'MANUAL' : 'QR';
 
-        return `
-          <tr id="row-${r.id}">
+        const groupKey = `${companyName}__${platoonName}`;
+
+        // Insert Company & Platoon separation header when group changes
+        if (groupKey !== currentGroupKey) {
+          currentGroupKey = groupKey;
+
+          // Compute sub-counts for this specific company + platoon
+          const groupCadets = sorted.filter(x => {
+            const xC = cleanCompanyDisplay(x.cadets?.company || x.cadets?.profiles?.company);
+            const xP = cleanPlatoonDisplay(x.cadets?.platoon || x.cadets?.profiles?.platoon);
+            return xC === companyName && xP === platoonName;
+          });
+
+          const gTotal = groupCadets.length;
+          const gPresent = groupCadets.filter(x => (x.status || '').toUpperCase() === 'PRESENT').length;
+          const gLate = groupCadets.filter(x => (x.status || '').toUpperCase() === 'LATE').length;
+          const gAbsent = groupCadets.filter(x => (x.status || '').toUpperCase() === 'ABSENT').length;
+
+          html += `
+            <tr class="roster-group-header" style="background: linear-gradient(90deg, rgba(21, 56, 37, 0.7) 0%, rgba(18, 36, 25, 0.55) 100%); border-top: 2px solid var(--portal-brass); border-bottom: 1px solid rgba(184, 142, 44, 0.35);">
+              <td colspan="9" style="padding: 0.7rem 1rem;">
+                <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.5rem;">
+                  <div style="display: flex; align-items: center; gap: 0.65rem;">
+                    <span style="display: inline-flex; align-items: center; justify-content: center; width: 26px; height: 26px; border-radius: 6px; background: var(--portal-brass); color: #09170e; font-size: 0.78rem; font-weight: 800;">
+                      <i class="fa-solid fa-shield-halved"></i>
+                    </span>
+                    <strong style="color: #ffffff; font-size: 0.92rem; letter-spacing: 0.04em;">${companyName.toUpperCase()}</strong>
+                    <span style="color: #94a3b8;">•</span>
+                    <span style="color: #fbbf24; font-weight: 700; font-size: 0.88rem;">${platoonName.toUpperCase()}</span>
+                  </div>
+                  <div style="display: flex; align-items: center; gap: 0.45rem; font-size: 0.74rem;">
+                    <span class="badge" style="background: rgba(255,255,255,0.08); color: #f8fafc; font-weight: 600;">${gTotal} Cadets</span>
+                    <span class="badge" style="background: rgba(34, 197, 94, 0.2); color: #4ade80; border: 1px solid rgba(34, 197, 94, 0.35); font-weight: 700;">${gPresent} Present</span>
+                    <span class="badge" style="background: rgba(245, 158, 11, 0.2); color: #fbbf24; border: 1px solid rgba(245, 158, 11, 0.35); font-weight: 700;">${gLate} Late</span>
+                    <span class="badge" style="background: rgba(239, 68, 68, 0.2); color: #f87171; border: 1px solid rgba(239, 68, 68, 0.35); font-weight: 700;">${gAbsent} Absent</span>
+                  </div>
+                </div>
+              </td>
+            </tr>
+          `;
+        }
+
+        const timeIn = r.scanned_at
+          ? new Date(r.scanned_at).toLocaleTimeString('en-PH', { hour12: false })
+          : '<span style="color: var(--portal-muted); font-style: italic;">---</span>';
+
+        const status = (r.status || 'ABSENT').toUpperCase();
+        const isRecorded = !!r.isRecorded;
+
+        let methodBadge = '';
+        if (!isRecorded || r.method === 'UNSCANNED') {
+          methodBadge = '<span class="badge" style="background: rgba(148,163,184,0.15); color: #94a3b8; border: 1px solid rgba(148,163,184,0.25);">UNSCANNED</span>';
+        } else if (r.method === 'MANUAL') {
+          methodBadge = '<span class="badge badge-warning">MANUAL</span>';
+        } else {
+          methodBadge = '<span class="badge badge-admin"><i class="fa-solid fa-qrcode" style="margin-right: 3px;"></i>QR</span>';
+        }
+
+        html += `
+          <tr id="row-${r.id}" style="${status === 'ABSENT' ? 'opacity: 0.88;' : ''}">
             <td>
               <div style="display: flex; align-items: center; gap: 0.65rem;">
                 <div style="width: 32px; height: 32px; border-radius: 50%; background: linear-gradient(135deg, #153825, #b88e2c); color: #fff; font-weight: 700; font-size: 0.76rem; display: grid; place-items: center; flex-shrink: 0;">
@@ -1184,24 +1428,33 @@
                 </div>
                 <div>
                   <div style="font-weight: 700; color: var(--portal-ink);">${fullName}</div>
-                  <div style="font-size: 0.72rem; color: var(--portal-muted);">${profile.company || 'Alpha Company'}</div>
+                  <div style="font-size: 0.74rem; font-family: 'JetBrains Mono', monospace; color: var(--portal-muted);">${studentId}</div>
                 </div>
               </div>
             </td>
-            <td style="font-family: 'JetBrains Mono', monospace; font-size: 0.82rem; font-weight: 600;">${studentId}</td>
-            <td style="font-size: 0.82rem;">${courseSec}</td>
-            <td style="font-size: 0.82rem; font-weight: 600; color: var(--portal-muted);">${platoon}</td>
             <td>
-              <div style="font-weight: 600; font-size: 0.84rem;">${sessionTitle}</div>
-              <div style="font-size: 0.72rem; color: var(--portal-light-text);">${sessionDate}</div>
+              <span class="badge badge-brass" style="font-size: 0.72rem; font-weight: 600;">
+                <i class="fa-solid fa-medal" style="margin-right: 2px;"></i>${designation}
+              </span>
             </td>
+            <td>
+              <span class="badge badge-admin" style="font-size: 0.72rem; font-weight: 600;">
+                <i class="fa-solid fa-flag" style="margin-right: 2px;"></i>${companyName}
+              </span>
+            </td>
+            <td>
+              <span class="badge" style="background: rgba(59, 130, 246, 0.14); color: #60a5fa; border: 1px solid rgba(59, 130, 246, 0.28); font-size: 0.72rem; font-weight: 600;">
+                <i class="fa-solid fa-users-line" style="margin-right: 2px;"></i>${platoonName}
+              </span>
+            </td>
+            <td style="font-size: 0.82rem;">${courseSec}</td>
             <td style="font-family: 'JetBrains Mono', monospace; font-size: 0.82rem;">
-              <i class="fa-regular fa-clock" style="font-size: 0.75rem; color: var(--portal-muted); margin-right: 0.25rem;"></i>${timeIn}
+              ${r.scanned_at ? `<i class="fa-regular fa-clock" style="font-size: 0.75rem; color: var(--portal-muted); margin-right: 0.25rem;"></i>${timeIn}` : timeIn}
             </td>
-            <td><span class="badge ${method === 'QR' ? 'badge-admin' : 'badge-warning'}">${method}</span></td>
+            <td>${methodBadge}</td>
             <td>
               <!-- Interactive Inline 1-Click Status Toggler -->
-              <select class="status-inline-pill status-${status.toLowerCase()}" onchange="updateStatus('${r.id}', this.value)" title="Change status instantly">
+              <select class="status-inline-pill status-${status.toLowerCase()}" onchange="updateStatus('${r.id}', this.value, '${r.cadet_id}')" title="Change status instantly">
                 <option value="present" ${status === 'PRESENT' ? 'selected' : ''}>✓ PRESENT</option>
                 <option value="late" ${status === 'LATE' ? 'selected' : ''}>⏳ LATE</option>
                 <option value="excused" ${status === 'EXCUSED' ? 'selected' : ''}>📋 EXCUSED</option>
@@ -1209,13 +1462,21 @@
               </select>
             </td>
             <td style="text-align: right;">
-              <button type="button" class="btn btn-sm btn-outline" onclick="deleteAttendanceRecord('${r.id}', '${fullName}')" title="Delete record" style="padding: 0.25rem 0.5rem; color: var(--portal-danger);">
-                <i class="fa-solid fa-trash-can"></i>
-              </button>
+              ${isRecorded ? `
+                <button type="button" class="btn btn-sm btn-outline" onclick="deleteAttendanceRecord('${r.id}', '${fullName}')" title="Reset to Absent" style="padding: 0.25rem 0.5rem; color: var(--portal-danger);">
+                  <i class="fa-solid fa-trash-can"></i>
+                </button>
+              ` : `
+                <button type="button" class="btn btn-sm btn-brass" onclick="quickCheckInCadet('${r.cadet_id}', '${fullName}')" title="Quick check-in (Mark Present)" style="padding: 0.25rem 0.55rem; font-size: 0.72rem; white-space: nowrap;">
+                  <i class="fa-solid fa-check"></i> Present
+                </button>
+              `}
             </td>
           </tr>
         `;
-      }).join('');
+      });
+
+      tbody.innerHTML = html;
     }
 
     // ── MOBILE HANDHELD CARDS RENDERER ──────────────────────────────────
@@ -1227,28 +1488,44 @@
         container.innerHTML = `
           <div style="text-align: center; padding: 2.5rem 1rem; color: var(--portal-muted); font-size: 0.9rem;">
             <i class="fa-solid fa-clipboard-question" style="font-size: 2rem; color: var(--portal-brass); margin-bottom: 0.5rem; display: block;"></i>
-            No attendance records found for this filter.
+            No cadets found for current filter.
           </div>
         `;
         return;
       }
 
-      container.innerHTML = records.map(r => {
+      let currentGroupKey = null;
+      let html = '';
+
+      records.forEach(r => {
         const profile = r.cadets?.profiles || {};
         const first = profile.first_name || '';
         const last = profile.last_name || 'Cadet';
         const initials = ((first[0] || '') + (last[0] || 'C')).toUpperCase();
         const fullName = `${first} ${last}`.trim() || 'Cadet';
         const studentId = profile.student_id ? `ID: ${profile.student_id}` : 'No ID';
+        const designation = cleanDesignationDisplay(r.cadets?.rank || profile.rank);
+        const companyName = cleanCompanyDisplay(r.cadets?.company || profile.company);
+        const platoonName = cleanPlatoonDisplay(r.cadets?.platoon || profile.platoon);
         const courseSec = `${profile.course || ''} ${profile.section || ''}`.trim();
-        const platoon = profile.platoon ? `• ${profile.platoon}` : '';
         const sessionTitle = r.attendance_sessions?.title || 'Formation Drill';
-        const timeIn = r.scanned_at ? `🕒 ${new Date(r.scanned_at).toLocaleTimeString('en-PH', { hour12: false })}` : 'No time-in';
-        const status = (r.status || 'present').toUpperCase();
-        const method = r.remarks && r.remarks.toLowerCase().includes('manual') ? 'MANUAL' : 'QR';
+        const timeIn = r.scanned_at ? `🕒 ${new Date(r.scanned_at).toLocaleTimeString('en-PH', { hour12: false })}` : '🕒 Not scanned yet';
+        const status = (r.status || 'ABSENT').toUpperCase();
+        const isRecorded = !!r.isRecorded;
 
-        return `
-          <div class="card" style="padding: 1.15rem; margin-bottom: 0.85rem; border: 1px solid var(--portal-border);">
+        const groupKey = `${companyName}__${platoonName}`;
+        if (groupKey !== currentGroupKey) {
+          currentGroupKey = groupKey;
+          html += `
+            <div style="padding: 0.65rem 0.9rem; margin: 1.25rem 0 0.65rem; background: rgba(21, 56, 37, 0.45); border-left: 4px solid var(--portal-brass); border-radius: 6px;">
+              <strong style="color: #ffffff; font-size: 0.88rem;">${companyName}</strong>
+              <span style="color: #fbbf24; font-size: 0.82rem; margin-left: 0.4rem;">• ${platoonName}</span>
+            </div>
+          `;
+        }
+
+        html += `
+          <div class="card" style="padding: 1.15rem; margin-bottom: 0.85rem; border: 1px solid var(--portal-border); ${status === 'ABSENT' ? 'opacity: 0.92;' : ''}">
             <div style="display: flex; align-items: flex-start; justify-content: space-between; gap: 0.75rem;">
               <div style="display: flex; gap: 0.75rem; align-items: center;">
                 <div style="width: 42px; height: 42px; border-radius: 50%; background: linear-gradient(135deg, #153825, #b88e2c); color: #fff; font-weight: 700; font-size: 0.9rem; display: grid; place-items: center; flex-shrink: 0;">
@@ -1256,10 +1533,15 @@
                 </div>
                 <div>
                   <div style="font-weight: 700; font-size: 0.95rem; color: var(--portal-ink);">${fullName}</div>
-                  <div style="font-size: 0.76rem; color: var(--portal-muted); font-family: monospace;">${studentId} ${courseSec ? '• ' + courseSec : ''} ${platoon}</div>
+                  <div style="font-size: 0.75rem; color: var(--portal-muted); font-family: monospace;">${studentId} ${courseSec ? '• ' + courseSec : ''}</div>
+                  <div style="display: flex; gap: 0.35rem; margin-top: 0.25rem; flex-wrap: wrap;">
+                    <span class="badge badge-brass" style="font-size: 0.68rem; padding: 0.15rem 0.45rem;">${designation}</span>
+                    <span class="badge badge-admin" style="font-size: 0.68rem; padding: 0.15rem 0.45rem;">${companyName}</span>
+                    <span class="badge" style="font-size: 0.68rem; padding: 0.15rem 0.45rem; background: rgba(59, 130, 246, 0.14); color: #60a5fa;">${platoonName}</span>
+                  </div>
                 </div>
               </div>
-              <span class="badge ${method === 'QR' ? 'badge-admin' : 'badge-warning'}">${method}</span>
+              <span class="badge ${isRecorded ? 'badge-admin' : ''}" style="${!isRecorded ? 'background: rgba(148,163,184,0.15); color: #94a3b8;' : ''}">${isRecorded ? (r.method || 'QR') : 'UNSCANNED'}</span>
             </div>
 
             <div style="margin: 0.75rem 0 0.5rem; font-size: 0.78rem; color: var(--portal-muted); display: flex; justify-content: space-between; align-items: center;">
@@ -1270,7 +1552,7 @@
             <!-- Quick Status Toggler on Mobile -->
             <div style="display: flex; align-items: center; justify-content: space-between; margin-top: 0.75rem; padding-top: 0.65rem; border-top: 1px solid var(--portal-border-subtle);">
               <span style="font-size: 0.78rem; font-weight: 600; color: var(--portal-muted);">Status Action:</span>
-              <select class="status-inline-pill status-${status.toLowerCase()}" onchange="updateStatus('${r.id}', this.value)">
+              <select class="status-inline-pill status-${status.toLowerCase()}" onchange="updateStatus('${r.id}', this.value, '${r.cadet_id}')">
                 <option value="present" ${status === 'PRESENT' ? 'selected' : ''}>✓ PRESENT</option>
                 <option value="late" ${status === 'LATE' ? 'selected' : ''}>⏳ LATE</option>
                 <option value="excused" ${status === 'EXCUSED' ? 'selected' : ''}>📋 EXCUSED</option>
@@ -1279,55 +1561,148 @@
             </div>
           </div>
         `;
-      }).join('');
+      });
+
+      container.innerHTML = html;
+    }
+
+    // Quick check-in for an unscanned cadet
+    async function quickCheckInCadet(cadetId, cadetName) {
+      await updateStatus(`unscanned-${cadetId}`, 'present', cadetId);
     }
 
     // ── STATUS UPDATER WITH OPTIMISTIC UI FEEDBACK ───────────────────────
-    async function updateStatus(recordId, newStatus) {
+    async function updateStatus(recordId, newStatus, cadetId = null) {
       const dbStatus = newStatus.toLowerCase();
-      
+      const currentSessionId = document.getElementById("filter-session")?.value;
+      const targetSessionId = (currentSessionId && currentSessionId !== "all")
+        ? currentSessionId
+        : (allSessions.length > 0 ? allSessions[0].id : null);
+
+      if (!targetSessionId) {
+        showPortalToast("Please select a specific formation session first.", "warning");
+        return;
+      }
+
       // Optimistic update in cache
-      const item = cachedAttendanceRecords.find(r => r.id === recordId);
+      const item = cachedAttendanceRecords.find(r => r.id === recordId || (cadetId && r.cadet_id === cadetId));
       const prevStatus = item ? item.status : null;
-      if (item) item.status = dbStatus;
-      
+      if (item) item.status = dbStatus.toUpperCase();
+
       updateKPIPillCounts();
+      filterAndRenderRecords();
 
-      // Send to Supabase
-      const { error } = await window.supabaseClient
-        .from("attendance_records")
-        .update({ status: dbStatus })
-        .eq("id", recordId);
+      try {
+        let insErr = null;
 
-      if (error) {
-        // Revert on failure
+        // If it's already an existing record in attendance_records table
+        if (recordId && !recordId.startsWith('unscanned-')) {
+          const { error } = await window.supabaseClient
+            .from("attendance_records")
+            .update({ status: dbStatus })
+            .eq("id", recordId);
+          insErr = error;
+        } else {
+          // It's a new check-in for an unscanned cadet: UPSERT to Supabase
+          const targetCadetId = cadetId || (item ? item.cadet_id : null);
+          if (!targetCadetId) throw new Error("Missing cadet ID for attendance record.");
+
+          const { data: newRow, error } = await window.supabaseClient
+            .from("attendance_records")
+            .upsert({
+              session_id: targetSessionId,
+              cadet_id: targetCadetId,
+              status: dbStatus,
+              scanned_at: new Date().toISOString(),
+              recorded_by: currentOfficer?.id || null,
+              remarks: "Manual status update via roster"
+            }, { onConflict: "session_id,cadet_id" })
+            .select("id")
+            .single();
+
+          insErr = error;
+          if (newRow?.id && item) {
+            item.id = newRow.id;
+            item.isRecorded = true;
+            item.method = 'MANUAL';
+            item.scanned_at = new Date().toISOString();
+          }
+        }
+
+        // Retry uppercase if DB check constraint is uppercase
+        if (insErr && insErr.message && insErr.message.includes("check constraint")) {
+          const upStatus = dbStatus.toUpperCase();
+          if (recordId && !recordId.startsWith('unscanned-')) {
+            const retry = await window.supabaseClient
+              .from("attendance_records")
+              .update({ status: upStatus })
+              .eq("id", recordId);
+            insErr = retry.error;
+          } else {
+            const targetCadetId = cadetId || (item ? item.cadet_id : null);
+            const retry = await window.supabaseClient
+              .from("attendance_records")
+              .upsert({
+                session_id: targetSessionId,
+                cadet_id: targetCadetId,
+                status: upStatus,
+                scanned_at: new Date().toISOString(),
+                recorded_by: currentOfficer?.id || null,
+                remarks: "Manual status update via roster"
+              }, { onConflict: "session_id,cadet_id" })
+              .select("id")
+              .single();
+            insErr = retry.error;
+            if (retry.data?.id && item) {
+              item.id = retry.data.id;
+              item.isRecorded = true;
+              item.method = 'MANUAL';
+            }
+          }
+        }
+
+        if (insErr) throw insErr;
+
+        showPortalToast(`Status updated to ${newStatus.toUpperCase()}`, "success");
+        updateKPIPillCounts();
+        filterAndRenderRecords();
+      } catch (err) {
+        console.error("Status update error:", err);
         if (item && prevStatus) item.status = prevStatus;
         updateKPIPillCounts();
         filterAndRenderRecords();
-        showPortalToast("Failed to update status: " + error.message, "error");
-      } else {
-        showPortalToast(`Status updated to ${newStatus.toUpperCase()}`, "success");
-        // Re-render to refresh badges and styles cleanly
-        filterAndRenderRecords();
+        showPortalToast("Failed to update status: " + err.message, "error");
       }
     }
 
-    // ── DELETE ATTENDANCE RECORD ─────────────────────────────────────────
+    // ── DELETE ATTENDANCE RECORD (RESETS TO ABSENT) ───────────────────────
     async function deleteAttendanceRecord(recordId, cadetName) {
-      if (!confirm(`Remove attendance entry for ${cadetName}?`)) return;
+      if (!confirm(`Reset attendance for ${cadetName}? Their status will return to ABSENT.`)) return;
 
-      const { error } = await window.supabaseClient
-        .from("attendance_records")
-        .delete()
-        .eq("id", recordId);
+      try {
+        const { error } = await window.supabaseClient
+          .from("attendance_records")
+          .delete()
+          .eq("id", recordId);
 
-      if (error) {
-        showPortalToast("Failed to delete record: " + error.message, "error");
-      } else {
-        cachedAttendanceRecords = cachedAttendanceRecords.filter(r => r.id !== recordId);
+        if (error) throw error;
+
+        // Find in cache and reset to unscanned ABSENT
+        const item = cachedAttendanceRecords.find(r => r.id === recordId);
+        if (item) {
+          item.id = `unscanned-${item.cadet_id}`;
+          item.status = 'ABSENT';
+          item.scanned_at = null;
+          item.isRecorded = false;
+          item.method = 'UNSCANNED';
+          item.remarks = 'Not yet scanned in';
+        }
+
         updateKPIPillCounts();
         filterAndRenderRecords();
-        showPortalToast("Attendance record removed.", "info");
+        showPortalToast(`Attendance entry for ${cadetName} reset to ABSENT.`, "info");
+      } catch (err) {
+        showPortalToast("Failed to reset record: " + err.message, "error");
       }
     }
 
@@ -1868,6 +2243,231 @@
       showPortalToast(`Camera switched to ${currentCameraMode === "environment" ? "Back (Environment)" : "Front (User)"}`, "info");
     }
 
+    // Helper to calculate whether attendance is on-time or late
+    function calculateAttendanceStatus(session, scanDate = new Date()) {
+      if (!session || !session.start_time) {
+        return 'PRESENT';
+      }
+      try {
+        const timeParts = session.start_time.split(':');
+        const startHour = parseInt(timeParts[0], 10);
+        const startMinute = parseInt(timeParts[1] || '0', 10);
+
+        // Build cutoff Date object based on session date or today's date
+        const sessionDateStr = session.session_date || scanDate.toISOString().split('T')[0];
+        const [year, month, day] = sessionDateStr.split('-').map(Number);
+        const cutoff = new Date(year, month - 1, day, startHour, startMinute, 0);
+
+        // If scan is after formation start time, mark as LATE
+        if (scanDate.getTime() > cutoff.getTime()) {
+          return 'LATE';
+        }
+        return 'PRESENT';
+      } catch (err) {
+        console.warn("calculateAttendanceStatus calculation note:", err);
+        return 'PRESENT';
+      }
+    }
+
+    // Auto-create or verify public.cadets record for a profile
+    async function ensureCadetRow(profile) {
+      if (!profile || !profile.id) return null;
+
+      try {
+        // 1. Check existing record in cadets table
+        const { data: existing } = await window.supabaseClient
+          .from("cadets")
+          .select("id, profile_id, rank, company, platoon")
+          .eq("profile_id", profile.id)
+          .maybeSingle();
+
+        if (existing?.id) {
+          return existing;
+        }
+
+        // 2. Insert new record with all required fields to avoid NOT NULL violations
+        const cadetPayload = {
+          profile_id: profile.id,
+          rotc_unit: profile.company ? `${profile.company} Company` : 'San Enrique ROTC Unit',
+          company: profile.company || 'Alpha',
+          platoon: profile.platoon || '1st Platoon',
+          rank: profile.rank || 'Cadet Private',
+          emergency_contact_name: profile.emergency_contact_name || 'Emergency Contact',
+          emergency_contact_relationship: profile.emergency_contact_relationship || 'Parent/Guardian',
+          emergency_contact_phone: profile.emergency_contact_phone || '09000000000',
+          enlistment_date: new Date().toISOString().split('T')[0]
+        };
+
+        const { data: newCadet, error: insErr } = await window.supabaseClient
+          .from("cadets")
+          .insert(cadetPayload)
+          .select("id, profile_id, rank, company, platoon")
+          .maybeSingle();
+
+        if (newCadet?.id) {
+          return newCadet;
+        }
+
+        if (insErr) {
+          console.warn("Full cadet insert error, retrying minimal fields:", insErr);
+          const { data: minCadet } = await window.supabaseClient
+            .from("cadets")
+            .insert({
+              profile_id: profile.id,
+              rotc_unit: profile.company || 'Alpha Company',
+              rank: 'Cadet Private'
+            })
+            .select("id, profile_id, rank, company, platoon")
+            .maybeSingle();
+
+          if (minCadet?.id) return minCadet;
+        }
+
+        // Re-check once more in case another process inserted
+        const { data: reCheck } = await window.supabaseClient
+          .from("cadets")
+          .select("id, profile_id, rank, company, platoon")
+          .eq("profile_id", profile.id)
+          .maybeSingle();
+
+        if (reCheck?.id) return reCheck;
+      } catch (e) {
+        console.error("ensureCadetRow exception:", e);
+      }
+      return null;
+    }
+
+    // Comprehensive token resolver for all QR formats, student IDs, and tokens
+    async function resolveCadetFromCode(decodedText) {
+      const rawText = (decodedText || '').trim();
+      if (!rawText) return { cadetProfile: null, cadetRowId: null };
+
+      let token = rawText;
+      let candidateStudentId = null;
+
+      // 1. JSON parsing check
+      if (token.startsWith('{') && token.endsWith('}')) {
+        try {
+          const parsed = JSON.parse(token);
+          if (parsed.student_id || parsed.studentId) candidateStudentId = parsed.student_id || parsed.studentId;
+          if (parsed.token) token = parsed.token;
+          if (parsed.id) {
+            const { data: byCadId } = await window.supabaseClient
+              .from("cadets")
+              .select("id, profile_id, rank, company, platoon, profiles(*)")
+              .eq("id", parsed.id)
+              .maybeSingle();
+            if (byCadId?.profiles) return { cadetProfile: byCadId.profiles, cadetRowId: byCadId.id };
+          }
+        } catch(e) {}
+      }
+
+      // 2. Direct UUID check (Regex for standard hex UUID)
+      const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+      if (uuidRegex.test(token)) {
+        // A. Is it cadets.id?
+        const { data: cById } = await window.supabaseClient
+          .from("cadets")
+          .select("id, profile_id, rank, company, platoon, profiles(*)")
+          .eq("id", token)
+          .maybeSingle();
+        if (cById?.profiles) return { cadetProfile: cById.profiles, cadetRowId: cById.id };
+
+        // B. Is it profiles.id?
+        const { data: pById } = await window.supabaseClient
+          .from("profiles")
+          .select("*")
+          .eq("id", token)
+          .maybeSingle();
+        if (pById) {
+          const cRow = await ensureCadetRow(pById);
+          return { cadetProfile: pById, cadetRowId: cRow?.id };
+        }
+      }
+
+      // 3. Build candidate student ID variants
+      const candidateList = [];
+      if (candidateStudentId) candidateList.push(candidateStudentId);
+
+      // Handle SE-ROTC- prefix
+      let withoutPrefix = token;
+      if (token.toUpperCase().startsWith("SE-ROTC-")) {
+        withoutPrefix = token.substring(8).trim();
+      }
+      candidateList.push(withoutPrefix);
+
+      // If it ends with -CADET (case-insensitive)
+      if (/-cadet$/i.test(withoutPrefix)) {
+        candidateList.push(withoutPrefix.replace(/-cadet$/i, '').trim());
+      }
+
+      // If it has a hex suffix (e.g. 24-00100-A1B2C3 from admin-cadets-print.html)
+      const parts = withoutPrefix.split('-');
+      if (parts.length >= 2) {
+        const lastPart = parts[parts.length - 1];
+        if (/^[0-9a-f]{6,8}$/i.test(lastPart) || lastPart.toUpperCase() === 'CADET') {
+          candidateList.push(parts.slice(0, -1).join('-'));
+        }
+      }
+
+      candidateList.push(token);
+
+      // Remove duplicates and empty strings
+      const uniqueCandidates = [...new Set(candidateList.filter(Boolean))];
+
+      // 4. Try matching against profiles.student_id
+      for (const cand of uniqueCandidates) {
+        const { data: p } = await window.supabaseClient
+          .from("profiles")
+          .select("*")
+          .eq("student_id", cand)
+          .maybeSingle();
+
+        if (p) {
+          const cRow = await ensureCadetRow(p);
+          return { cadetProfile: p, cadetRowId: cRow?.id };
+        }
+      }
+
+      // 5. Try qr_codes table (token or public_qr_id)
+      const { data: qrRow } = await window.supabaseClient
+        .from("qr_codes")
+        .select("cadet_id, cadets(id, profile_id, rank, company, platoon, profiles(*))")
+        .or(`token.eq.${token},public_qr_id.eq.${token}`)
+        .maybeSingle();
+
+      if (qrRow?.cadets?.profiles) {
+        return { cadetProfile: qrRow.cadets.profiles, cadetRowId: qrRow.cadets.id || qrRow.cadet_id };
+      }
+
+      // 6. Try cadets table direct token match (qr_token, serial_number, cadet_number)
+      const { data: cRow } = await window.supabaseClient
+        .from("cadets")
+        .select("id, profile_id, rank, company, platoon, profiles(*)")
+        .or(`qr_token.eq.${token},serial_number.eq.${token},cadet_number.eq.${token}`)
+        .maybeSingle();
+
+      if (cRow?.profiles) {
+        return { cadetProfile: cRow.profiles, cadetRowId: cRow.id };
+      }
+
+      // 7. Try email match
+      if (token.includes('@')) {
+        const { data: pEmail } = await window.supabaseClient
+          .from("profiles")
+          .select("*")
+          .eq("email", token.toLowerCase())
+          .maybeSingle();
+
+        if (pEmail) {
+          const cRow = await ensureCadetRow(pEmail);
+          return { cadetProfile: pEmail, cadetRowId: cRow?.id };
+        }
+      }
+
+      return { cadetProfile: null, cadetRowId: null };
+    }
+
     async function onQrCodeDetected(decodedText) {
       if (isScannerLocked) return;
       isScannerLocked = true;
@@ -1883,80 +2483,15 @@
         const rawText = (decodedText || '').trim();
         if (!rawText) throw new Error("Empty scan code.");
 
-        let studentIdCandidate = rawText;
-        if (rawText.startsWith("SE-ROTC-")) {
-          const clean = rawText.replace(/^SE-ROTC-/, "");
-          const parts = clean.split("-");
-          studentIdCandidate = (parts.length >= 2) ? parts.slice(0, -1).join("-") : clean;
-        }
-
-        let cadetProfile = null;
-        let cadetRowId = null;
-
-        // 1. Primary lookup by student_id
-        let { data: profileRow } = await window.supabaseClient
-          .from("profiles")
-          .select("id, first_name, last_name, student_id, company, platoon, section, course")
-          .eq("student_id", studentIdCandidate)
-          .maybeSingle();
-
-        if (profileRow) {
-          cadetProfile = profileRow;
-          const { data: cadetRow } = await window.supabaseClient
-            .from("cadets")
-            .select("id")
-            .eq("profile_id", profileRow.id)
-            .maybeSingle();
-          cadetRowId = cadetRow?.id;
-        }
-
-        // 2. Secondary lookup via qr_codes table
-        if (!cadetProfile) {
-          const { data: qrRow } = await window.supabaseClient
-            .from("qr_codes")
-            .select("cadet_id, cadets(id, profile_id, profiles(id, first_name, last_name, student_id, company, platoon, section, course))")
-            .eq("token", rawText)
-            .maybeSingle();
-          if (qrRow?.cadets?.profiles) {
-            cadetProfile = qrRow.cadets.profiles;
-            cadetRowId = qrRow.cadets.id;
-          }
-        }
-
-        // 3. Tertiary raw match
-        if (!cadetProfile) {
-          const { data: p2 } = await window.supabaseClient
-            .from("profiles")
-            .select("id, first_name, last_name, student_id, company, platoon, section, course")
-            .eq("student_id", rawText)
-            .maybeSingle();
-          if (p2) {
-            cadetProfile = p2;
-            const { data: c2 } = await window.supabaseClient
-              .from("cadets")
-              .select("id")
-              .eq("profile_id", p2.id)
-              .maybeSingle();
-            cadetRowId = c2?.id;
-          }
-        }
+        // Resolve cadet profile and cadetRowId safely
+        const { cadetProfile, cadetRowId } = await resolveCadetFromCode(decodedText);
 
         if (!cadetProfile) {
-          throw new Error(`Unrecognized Cadet code: "${rawText}"`);
+          throw new Error(`Unrecognized Cadet code: "${decodedText}". Please verify the cadet is registered.`);
         }
 
-        // Auto-enroll in cadets table if missing
         if (!cadetRowId) {
-          const { data: newC } = await window.supabaseClient
-            .from("cadets")
-            .insert({
-              profile_id: cadetProfile.id,
-              rotc_unit: cadetProfile.company || 'Alpha Company',
-              rank: 'Cadet'
-            })
-            .select("id")
-            .single();
-          cadetRowId = newC?.id;
+          throw new Error(`Cadet profile found (${cadetProfile.last_name}, ${cadetProfile.first_name}), but no ROTC cadet record could be linked. Please run background sync.`);
         }
 
         // ── PERMISSION CHECK: allowed_scanner_type enforcement ──────────
@@ -2003,7 +2538,6 @@
           }
         }
 
-
         // Duplicate Check in active stream
         const isAlreadyScanned = modalScannedList.some(s => s.cadet_id === cadetRowId);
         if (isAlreadyScanned) {
@@ -2017,24 +2551,53 @@
         const now = new Date();
         const timeString = now.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
 
-        // Upsert into Supabase attendance_records
-        const { error: insErr } = await window.supabaseClient
+        // Calculate whether cadet is PRESENT or LATE based on session start_time
+        const currentSession = allSessions.find(s => s.id === sessionId);
+        const scanStatus = calculateAttendanceStatus(currentSession, now); // 'PRESENT' or 'LATE'
+        const isLate = (scanStatus === 'LATE');
+
+        let dbStatus = scanStatus.toLowerCase();
+
+        // Upsert into Supabase attendance_records with guaranteed non-null cadet_id
+        let { error: insErr } = await window.supabaseClient
           .from("attendance_records")
           .upsert({
             session_id: sessionId,
             cadet_id: cadetRowId,
-            status: "PRESENT",
+            status: dbStatus,
             scanned_at: now.toISOString(),
-            recorded_by: currentOfficer?.id || null
+            recorded_by: currentOfficer?.id || null,
+            remarks: isLate ? `Late arrival (scanned at ${timeString})` : 'On-time QR scan'
           }, { onConflict: "session_id,cadet_id" });
 
-        if (insErr) throw insErr;
+        // Retry uppercase status if database schema has uppercase check constraint
+        if (insErr && insErr.message && insErr.message.includes("check constraint")) {
+          dbStatus = scanStatus.toUpperCase();
+          const retry = await window.supabaseClient
+            .from("attendance_records")
+            .upsert({
+              session_id: sessionId,
+              cadet_id: cadetRowId,
+              status: dbStatus,
+              scanned_at: now.toISOString(),
+              recorded_by: currentOfficer?.id || null,
+              remarks: isLate ? `Late arrival (scanned at ${timeString})` : 'On-time QR scan'
+            }, { onConflict: "session_id,cadet_id" });
+          if (retry.error) throw retry.error;
+        } else if (insErr) {
+          throw insErr;
+        }
 
-        // Positive Audio & Haptic Confirmation
-        playScannerBeep('success');
-        if (navigator.vibrate) navigator.vibrate([100, 50, 100]);
-
-        showScannerFeedback("success", `PRESENT • ${cadetProfile.last_name}, ${cadetProfile.first_name}`, `${cadetProfile.student_id} • ${cadetProfile.company || 'Alpha'} • ${timeString}`);
+        // Audio & Haptic Confirmation: warning tone for late, success double beep for on-time
+        if (isLate) {
+          playScannerBeep('warning');
+          if (navigator.vibrate) navigator.vibrate([200, 100, 200]);
+          showScannerFeedback("warning", `LATE • ${cadetProfile.last_name}, ${cadetProfile.first_name}`, `${cadetProfile.student_id} • ${cadetProfile.company || 'Alpha'} • ${timeString} (Arrived past formation time)`);
+        } else {
+          playScannerBeep('success');
+          if (navigator.vibrate) navigator.vibrate([100, 50, 100]);
+          showScannerFeedback("success", `PRESENT • ${cadetProfile.last_name}, ${cadetProfile.first_name}`, `${cadetProfile.student_id} • ${cadetProfile.company || 'Alpha'} • ${timeString}`);
+        }
 
         // Prepend to Live Stream in Modal
         modalScannedList.unshift({
@@ -2043,11 +2606,22 @@
           student_id: cadetProfile.student_id,
           unit: `${cadetProfile.company || ''} ${cadetProfile.platoon || ''}`.trim() || 'Cadet',
           time_in: timeString,
-          status: 'PRESENT'
+          status: scanStatus
         });
 
         renderModalStreamList();
-        showPortalToast(`Logged ${cadetProfile.last_name}, ${cadetProfile.first_name} as PRESENT`, "success");
+        showPortalToast(`Logged ${cadetProfile.last_name}, ${cadetProfile.first_name} as ${scanStatus}`, isLate ? "warning" : "success");
+
+        // Immediately update background roster item in cache
+        const cachedItem = cachedAttendanceRecords.find(r => r.cadet_id === cadetRowId);
+        if (cachedItem) {
+          cachedItem.status = scanStatus;
+          cachedItem.scanned_at = now.toISOString();
+          cachedItem.isRecorded = true;
+          cachedItem.method = 'QR';
+          updateKPIPillCounts();
+          filterAndRenderRecords();
+        }
 
       } catch (err) {
         console.error("Scan error:", err);
@@ -2156,6 +2730,16 @@
 
       container.innerHTML = items.map(c => {
         const initials = c.cadet_name.split(' ').map(w => w[0]).filter(Boolean).slice(0, 2).join('').toUpperCase() || 'CD';
+        const st = (c.status || 'PRESENT').toUpperCase();
+        let badgeStyle = 'background: rgba(34, 197, 94, 0.2); color: #4ade80; border: 1px solid rgba(74, 222, 128, 0.4);';
+        if (st === 'LATE') {
+          badgeStyle = 'background: rgba(245, 158, 11, 0.2); color: #fbbf24; border: 1px solid rgba(251, 191, 36, 0.4);';
+        } else if (st === 'EXCUSED') {
+          badgeStyle = 'background: rgba(59, 130, 246, 0.2); color: #60a5fa; border: 1px solid rgba(96, 165, 250, 0.4);';
+        } else if (st === 'ABSENT') {
+          badgeStyle = 'background: rgba(239, 68, 68, 0.2); color: #f87171; border: 1px solid rgba(248, 113, 113, 0.4);';
+        }
+
         return `
           <div class="stream-cadet-card">
             <div style="display: flex; align-items: center; gap: 0.75rem;">
@@ -2166,7 +2750,7 @@
               </div>
             </div>
             <div style="text-align: right;">
-              <span style="display: inline-block; font-size: 0.68rem; font-weight: 800; padding: 0.18rem 0.55rem; border-radius: 4px; background: rgba(34, 197, 94, 0.2); color: #4ade80; border: 1px solid rgba(74, 222, 128, 0.4); text-transform: uppercase;">${c.status}</span>
+              <span style="display: inline-block; font-size: 0.68rem; font-weight: 800; padding: 0.18rem 0.55rem; border-radius: 4px; text-transform: uppercase; ${badgeStyle}">${st}</span>
               <div style="font-size: 0.72rem; color: #cbd5e1; margin-top: 0.25rem; font-family: 'JetBrains Mono', monospace;">${c.time_in}</div>
             </div>
           </div>
