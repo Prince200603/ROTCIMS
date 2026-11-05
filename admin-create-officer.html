@@ -281,6 +281,17 @@
       letter-spacing: 0.03em;
     }
 
+    .form-helper {
+      display: block;
+      font-size: 0.73rem;
+      color: #64748b;
+      margin-top: 0.32rem;
+      line-height: 1.35;
+      text-transform: none;
+      letter-spacing: normal;
+      font-weight: 400;
+    }
+
     .officer-badge-preview {
       display: inline-flex;
       align-items: center;
@@ -426,39 +437,43 @@
               1. Officer Identity &amp; Command Classification
             </div>
 
-            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem;">
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem; margin-bottom: 1.25rem;">
               <div class="form-group">
                 <label for="first_name"><i class="fa-solid fa-user"></i> First Name *</label>
                 <div class="input-icon-box">
                   <i class="fa-solid fa-signature"></i>
-                  <input type="text" id="first_name" required placeholder="e.g. Juan">
+                  <input type="text" id="first_name" required placeholder="Enter first name">
                 </div>
+                <span class="form-helper">Example: Juan</span>
               </div>
 
               <div class="form-group">
                 <label for="middle_name"><i class="fa-solid fa-user"></i> Middle Name</label>
                 <div class="input-icon-box">
                   <i class="fa-solid fa-signature"></i>
-                  <input type="text" id="middle_name" placeholder="e.g. Dela">
+                  <input type="text" id="middle_name" placeholder="Enter middle name">
                 </div>
+                <span class="form-helper">Example: Reyes (leave blank if not applicable)</span>
               </div>
 
               <div class="form-group">
                 <label for="last_name"><i class="fa-solid fa-user"></i> Last Name *</label>
                 <div class="input-icon-box">
                   <i class="fa-solid fa-signature"></i>
-                  <input type="text" id="last_name" required placeholder="e.g. Cruz">
+                  <input type="text" id="last_name" required placeholder="Enter last name">
                 </div>
+                <span class="form-helper">Example: Dela Cruz</span>
               </div>
             </div>
 
-            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem;">
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem; margin-bottom: 1.25rem;">
               <div class="form-group">
                 <label for="student_id"><i class="fa-solid fa-hashtag"></i> Student / Officer ID *</label>
                 <div class="input-icon-box">
                   <i class="fa-solid fa-barcode"></i>
-                  <input type="text" id="student_id" required placeholder="e.g. 24-00123">
+                  <input type="text" id="student_id" required placeholder="Enter officer ID number">
                 </div>
+                <span class="form-helper">Example: 2026-00123</span>
               </div>
 
               <div class="form-group">
@@ -466,7 +481,7 @@
                 <div class="input-icon-box">
                   <i class="fa-solid fa-book-bookmark"></i>
                   <select id="course">
-                    <option value="" disabled selected>-- Select Course --</option>
+                    <option value="" disabled selected>Select degree course</option>
                     <option value="BSIT">BSIT</option>
                     <option value="BSOA">BSOA</option>
                     <option value="BSHM">BSHM</option>
@@ -475,6 +490,7 @@
                     <option value="Other">Other Degree Course</option>
                   </select>
                 </div>
+                <span class="form-helper">Example: BSIT</span>
               </div>
 
               <div class="form-group">
@@ -488,6 +504,7 @@
                     <option value="4th Year">4th Year</option>
                   </select>
                 </div>
+                <span class="form-helper">Example: 3rd Year</span>
               </div>
             </div>
 
@@ -505,7 +522,7 @@
                   <div class="input-icon-box">
                     <i class="fa-solid fa-medal"></i>
                     <select id="officer_class" required onchange="onOfficerClassChange()">
-                      <option value="" disabled selected>-- Select Officer Class --</option>
+                      <option value="" disabled selected>Select officer class</option>
                       <option value="1st_class_officer">🥇 1st Class Officers</option>
                       <option value="2nd_class_officer">🥈 2nd Class Officers</option>
                       <option value="3rd_class_officer">🥉 3rd Class Officers</option>
@@ -513,6 +530,7 @@
                       <option value="advance_officer">🎖️ Advance Officers</option>
                     </select>
                   </div>
+                  <span class="form-helper">Select commissioning class level</span>
                 </div>
 
                 <!-- Dynamic Position Dropdown -->
@@ -521,9 +539,10 @@
                   <div class="input-icon-box">
                     <i class="fa-solid fa-user-shield"></i>
                     <select id="officer_position" required onchange="onOfficerPositionChange()" disabled>
-                      <option value="" disabled selected>-- First Select Officer Class --</option>
+                      <option value="" disabled selected>First select officer class</option>
                     </select>
                   </div>
+                  <span class="form-helper">Select operational appointment</span>
                 </div>
               </div>
             </div>
@@ -543,6 +562,7 @@
                     <option value="Headquarters (GHQ)">Headquarters (GHQ)</option>
                   </select>
                 </div>
+                <span class="form-helper">Example: Alpha Company (or Headquarters)</span>
                 <small id="company-lock-msg" style="color:#b88e2c; font-size:0.75rem; display:none; margin-top:0.25rem; font-weight:600;">
                   <i class="fa-solid fa-lock"></i> Automatically assigned to this company.
                 </small>
@@ -560,6 +580,7 @@
                     <option value="Alpha Platoon">Alpha Platoon</option>
                   </select>
                 </div>
+                <span class="form-helper">Example: 1st Platoon (or Headquarters)</span>
                 <small style="color:#64748b; font-size:0.75rem; display:block; margin-top:0.25rem;">
                   Platoon Leaders record attendance strictly for their assigned platoon.
                 </small>
@@ -579,14 +600,16 @@
                   <i class="fa-solid fa-calendar"></i>
                   <input type="date" id="date_of_birth">
                 </div>
+                <span class="form-helper">Example: 2003-05-12 (select date)</span>
               </div>
 
               <div class="form-group">
                 <label for="phone"><i class="fa-solid fa-mobile-screen"></i> Contact Phone *</label>
                 <div class="input-icon-box">
                   <i class="fa-solid fa-phone"></i>
-                  <input type="tel" id="phone" required placeholder="09170000000">
+                  <input type="tel" id="phone" required placeholder="Enter phone number">
                 </div>
+                <span class="form-helper">Example: 0917 000 0000</span>
               </div>
             </div>
 
@@ -594,8 +617,9 @@
               <label for="address"><i class="fa-solid fa-location-dot"></i> Permanent Residence</label>
               <div class="input-icon-box">
                 <i class="fa-solid fa-map-pin"></i>
-                <input type="text" id="address" placeholder="Barangay, Municipality, Province">
+                <input type="text" id="address" placeholder="Enter permanent address">
               </div>
+              <span class="form-helper">Example: Brgy. Poblacion, San Enrique, Iloilo</span>
             </div>
 
             <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 1rem; margin-bottom: 2rem;">
@@ -603,16 +627,18 @@
                 <label for="emergency_contact_name"><i class="fa-solid fa-person-breastfeeding"></i> Emergency Contact Name</label>
                 <div class="input-icon-box">
                   <i class="fa-solid fa-user-shield"></i>
-                  <input type="text" id="emergency_contact_name" placeholder="Parent or Next of Kin">
+                  <input type="text" id="emergency_contact_name" placeholder="Enter emergency contact name">
                 </div>
+                <span class="form-helper">Example: Maria Dela Cruz (Parent / Next of Kin)</span>
               </div>
 
               <div class="form-group">
                 <label for="emergency_contact_phone"><i class="fa-solid fa-phone-volume"></i> Emergency Contact Phone</label>
                 <div class="input-icon-box">
                   <i class="fa-solid fa-phone-flip"></i>
-                  <input type="tel" id="emergency_contact_phone" placeholder="09170000000">
+                  <input type="tel" id="emergency_contact_phone" placeholder="Enter emergency contact phone">
                 </div>
+                <span class="form-helper">Example: 0918 000 0000</span>
               </div>
             </div>
 
@@ -622,21 +648,32 @@
               3. Officer System Credentials &amp; Provisioning
             </div>
 
-            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 1rem; margin-bottom: 1.25rem;">
-              <div class="form-group">
-                <label for="email"><i class="fa-solid fa-envelope"></i> Institutional Email *</label>
-                <div class="input-icon-box">
-                  <i class="fa-solid fa-at"></i>
-                  <input type="email" id="email" required placeholder="officer@sanenrique.edu.ph" autocomplete="email">
-                </div>
+            <div class="form-group" style="margin-bottom: 1.25rem;">
+              <label for="email"><i class="fa-solid fa-envelope"></i> Institutional Email / Username *</label>
+              <div class="input-icon-box">
+                <i class="fa-solid fa-at"></i>
+                <input type="email" id="email" required placeholder="Enter institutional email" autocomplete="username">
               </div>
+              <span class="form-helper">Example: officer@sanenrique.edu.ph (serves as system sign-in username)</span>
+            </div>
 
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 1rem; margin-bottom: 1.25rem;">
               <div class="form-group">
                 <label for="password"><i class="fa-solid fa-key"></i> Initial Password (Min 8 Chars) *</label>
                 <div class="input-icon-box">
                   <i class="fa-solid fa-lock"></i>
-                  <input type="password" id="password" required minlength="8" placeholder="••••••••" autocomplete="new-password">
+                  <input type="password" id="password" required minlength="8" placeholder="Enter password" autocomplete="new-password">
                 </div>
+                <span class="form-helper">Must be at least 8 characters long</span>
+              </div>
+
+              <div class="form-group">
+                <label for="password_confirm"><i class="fa-solid fa-shield-halved"></i> Confirm Password *</label>
+                <div class="input-icon-box">
+                  <i class="fa-solid fa-lock"></i>
+                  <input type="password" id="password_confirm" required minlength="8" placeholder="Re-enter password" autocomplete="new-password">
+                </div>
+                <span class="form-helper">Re-type initial password to confirm</span>
               </div>
             </div>
 
@@ -835,6 +872,15 @@
       const emPhone       = document.getElementById("emergency_contact_phone").value.trim();
       const email         = document.getElementById("email").value.trim();
       const password      = document.getElementById("password").value;
+      const confirmPwEl   = document.getElementById("password_confirm");
+      const confirmPw     = confirmPwEl ? confirmPwEl.value : "";
+
+      if (password !== confirmPw) {
+        alert("Validation error: Passwords do not match. Please re-enter your password confirmation.");
+        btn.disabled = false;
+        btn.innerHTML = '<i class="fa-solid fa-user-shield"></i> Commission & Provision Officer Account';
+        return;
+      }
 
       // 1. Validation check
       if (!window.RBAC.isValidClassPosition(officerClass, position)) {
