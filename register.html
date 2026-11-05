@@ -703,27 +703,37 @@
       const passwordConfirmEl = document.getElementById('password_confirm');
 
 
-      // Check whether an active session already exists (e.g. from Google OAuth)
+      // Check whether an active session already exists (e.g. from Google OAuth redirect)
+      // IMPORTANT: Only run auto-prefill and dashboard redirect when the user intentionally
+      // arrived here via Google Sign-In (google_signup=1 in URL). A plain visit to register.html
+      // must NEVER auto-redirect — the user should see the form normally.
       async function checkSessionAndPopulate() {
+        const isGoogleSignupFlow = urlParams.get('google_signup') === '1';
         try {
           const session = await Auth.getSession();
           if (session && session.user) {
             // Check whether the Google account is already registered in profiles
             const profile = await Auth.getProfile();
             if (profile) {
-              // Account is ALREADY registered: redirect immediately to dashboard
-              alertBox.className = "alert alert-success";
-              alertBox.innerHTML = `<div><i class="fa-solid fa-circle-check" style="font-size:1.25rem; margin-right:0.5rem;"></i> <strong>Already Registered:</strong> Redirecting to your cadet dashboard…</div>`;
-              alertBox.style.display = "flex";
-              setTimeout(() => {
-                window.location.href = profile.role === 'cadet'
-                  ? 'cadet-dashboard.html'
-                  : 'admin-dashboard.html';
-              }, 400);
+              // Account is ALREADY registered: only redirect if user came from Google Sign-In flow
+              if (isGoogleSignupFlow) {
+                alertBox.className = "alert alert-success";
+                alertBox.innerHTML = `<div><i class="fa-solid fa-circle-check" style="font-size:1.25rem; margin-right:0.5rem;"></i> <strong>Already Registered:</strong> Redirecting to your cadet dashboard…</div>`;
+                alertBox.style.display = "flex";
+                setTimeout(() => {
+                  window.location.href = profile.role === 'cadet'
+                    ? 'cadet-dashboard.html'
+                    : 'admin-dashboard.html';
+                }, 400);
+              }
+              // If NOT a google_signup flow, do nothing — let the user use the manual form
               return;
             }
 
             // Google account is authenticated but NOT yet registered:
+            // Only prefill if the user came via Google Sign-In flow
+            if (!isGoogleSignupFlow) return;
+
             // Extract Google account info
             const userMeta = session.user.user_metadata || {};
             const googleEmail = session.user.email || userMeta.email || '';
@@ -786,7 +796,7 @@
           if (parts.length > 1 && lastNameEl && !lastNameEl.value) lastNameEl.value = parts.slice(1).join(' ');
         }
 
-        if (urlParams.get('google_signup') === '1') {
+        if (isGoogleSignupFlow) {
           if (passwordEl) {
             passwordEl.removeAttribute('required');
             passwordEl.placeholder = "Enter password (optional with Google)";
@@ -804,11 +814,30 @@
         if (emailEl) emailEl.readOnly = false;
       }
 
-      // Run session and prefill check
-      await checkSessionAndPopulate();
+      // Run session and prefill check ONLY when user intentionally arrived via Google Sign-In.
+      // A plain visit to register.html must never trigger session checks or auto-redirects.
+      if (urlParams.get('google_signup') === '1') {
+        await checkSessionAndPopulate();
+      } else {
+        // No google_signup flow — only apply any URL params that may be present (safe, no session call)
+        const paramEmail = urlParams.get('email');
+        const paramFirstName = urlParams.get('first_name');
+        const paramLastName = urlParams.get('last_name');
+        const paramName = urlParams.get('name');
+        if (paramEmail && emailEl && !emailEl.value) emailEl.value = paramEmail;
+        if (paramFirstName && firstNameEl && !firstNameEl.value) firstNameEl.value = paramFirstName;
+        if (paramLastName && lastNameEl && !lastNameEl.value) lastNameEl.value = paramLastName;
+        if (paramName && (!firstNameEl?.value || !lastNameEl?.value)) {
+          const parts = paramName.trim().split(/\s+/);
+          if (parts.length > 0 && firstNameEl && !firstNameEl.value) firstNameEl.value = parts[0];
+          if (parts.length > 1 && lastNameEl && !lastNameEl.value) lastNameEl.value = parts.slice(1).join(' ');
+        }
+      }
 
-      // Listen for OAuth completion if redirect happened on the same page
-      if (window.supabaseClient?.auth) {
+      // Listen for OAuth completion — only act when user is in the google_signup flow
+      // (i.e. they clicked "Continue with Google" on login.html and landed here).
+      // This prevents passive session restoration from triggering unwanted redirects.
+      if (window.supabaseClient?.auth && urlParams.get('google_signup') === '1') {
         window.supabaseClient.auth.onAuthStateChange(async (event, session) => {
           if (event === 'SIGNED_IN' && session) {
             await checkSessionAndPopulate();

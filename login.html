@@ -797,20 +797,37 @@
         // Don't auto-redirect to dashboard, but CONTINUE executing the rest of the function
         // so form event listeners (submit, oauth) are fully bound and active!
       } else {
-        // Check for existing session or incoming OAuth callback
-        try {
-          const session = await Auth.getSession();
-          if (session) {
-            await handleAuthenticatedUser(session);
+        // Only handle authenticated users when there is an OAuth callback in the URL.
+        // A plain page load (no OAuth params) must NEVER auto-redirect — the user must
+        // explicitly click "Continue with Google" or the sign-in form button.
+        const _hash = window.location.hash || '';
+        const _search = window.location.search || '';
+        const _isOAuthCallback = _hash.includes('access_token') ||
+                                 _hash.includes('error=') ||
+                                 _search.includes('code=') ||
+                                 _search.includes('error=');
+
+        if (_isOAuthCallback) {
+          // Incoming OAuth redirect — handle the authenticated session
+          try {
+            const session = await Auth.getSession();
+            if (session) {
+              await handleAuthenticatedUser(session);
+            }
+          } catch (sessErr) {
+            console.warn("Session check error on OAuth callback:", sessErr);
           }
-        } catch (sessErr) {
-          console.warn("Session check error on login load:", sessErr);
         }
 
-        // Catch OAuth sign-in completion event
-        if (window.supabaseClient?.auth) {
+        // Catch fresh OAuth sign-in completion events.
+        // IMPORTANT: Supabase fires SIGNED_IN both on a fresh OAuth login AND when it
+        // restores an existing session from storage on page load. We must only act on
+        // a genuine OAuth callback — indicated by the presence of OAuth params in the URL
+        // (already checked above in _isOAuthCallback). We use a flag so the listener
+        // only acts if we're currently processing an OAuth callback, never on passive restore.
+        if (window.supabaseClient?.auth && _isOAuthCallback) {
           window.supabaseClient.auth.onAuthStateChange(async (event, session) => {
-            if (event === 'SIGNED_IN' && session) {
+            if (event === 'SIGNED_IN' && session && !isRedirecting) {
               await handleAuthenticatedUser(session);
             }
           });
