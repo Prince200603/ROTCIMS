@@ -335,6 +335,32 @@
       color: #78350f;
       line-height: 1.5;
     }
+
+    /* Google OAuth button */
+    .btn-oauth {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0.75rem;
+      width: 100%;
+      padding: 0.85rem 1.25rem;
+      border-radius: 12px;
+      font-size: 0.95rem;
+      font-weight: 600;
+      cursor: pointer;
+      border: 1.5px solid #d1d5db;
+      background: #ffffff;
+      color: #1a2e22;
+      transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+      box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+      font-family: 'Inter', sans-serif;
+    }
+    .btn-oauth:hover {
+      background: #f8faf9;
+      border-color: #b88e2c;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+      transform: translateY(-1px);
+    }
   </style>
 </head>
 <body>
@@ -395,6 +421,24 @@
 
       <div style="padding: 2.25rem;">
         <div id="alert-box" class="alert" style="display: none; margin-bottom: 1.5rem;"></div>
+
+        <!-- Google OAuth Enlistment Option -->
+        <div class="oauth-section" style="max-width: 460px; margin: 0 auto 2rem auto; text-align: center;">
+          <button type="button" class="btn-oauth btn-google" id="btn-google-signup">
+            <svg viewBox="0 0 24 24" style="width:20px; height:20px; flex-shrink: 0;">
+              <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
+              <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
+              <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z"/>
+              <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"/>
+            </svg>
+            <span>Continue with Google</span>
+          </button>
+          <div style="display: flex; align-items: center; text-align: center; margin: 1.25rem 0 0.5rem 0; color: #9ca3af; font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.08em;">
+            <span style="flex: 1; border-bottom: 1px solid #e5e7eb;"></span>
+            <span style="padding: 0 0.85rem; font-weight: 600;">or enlist manually below</span>
+            <span style="flex: 1; border-bottom: 1px solid #e5e7eb;"></span>
+          </div>
+        </div>
 
         <form id="register-form">
           <div class="reg-split-grid">
@@ -472,7 +516,7 @@
 
               <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem; margin-bottom: 1.25rem;">
                 <div class="form-group">
-                  <label for="student_id"><i class="fa-solid fa-hashtag"></i> Student ID Number *</label>
+                  <label for="student_id"><i class="fa-solid fa-hashtag"></i> Cadet / Student ID Number *</label>
                   <div class="input-icon-box">
                     <i class="fa-solid fa-barcode"></i>
                     <input type="text" id="student_id" required placeholder="e.g. 2026-00123">
@@ -704,30 +748,166 @@
       reader.readAsDataURL(file);
     }
 
-    // ── FORM SUBMISSION ──────────────────────────────────────────────────
-    document.addEventListener("DOMContentLoaded", () => {
+    // ── FORM INITIALIZATION & SUBMISSION ──────────────────────────────────
+    document.addEventListener("DOMContentLoaded", async () => {
       const form = document.getElementById("register-form");
       const btn = document.getElementById("btn-submit");
       const alertBox = document.getElementById("alert-box");
+      const urlParams = new URLSearchParams(window.location.search);
 
-      // Prefill from social login URL parameters if present
-      const urlParams  = new URLSearchParams(window.location.search);
-      const paramEmail = urlParams.get('email');
-      const paramName  = urlParams.get('name');
-      if (paramEmail) {
-        const emailEl = document.getElementById('email');
-        if (emailEl) emailEl.value = paramEmail;
+      // Elements to populate/manage
+      const emailEl = document.getElementById('email');
+      const firstNameEl = document.getElementById('first_name');
+      const lastNameEl = document.getElementById('last_name');
+      const passwordEl = document.getElementById('password');
+      const btnGoogleSignup = document.getElementById('btn-google-signup');
+
+      // Bind Google Sign-In button on register form
+      if (btnGoogleSignup) {
+        btnGoogleSignup.addEventListener("click", async () => {
+          try {
+            if (typeof Auth.signInWithGoogle === 'function') {
+              await Auth.signInWithGoogle('register.html');
+            } else {
+              let redirectUrl = 'https://sanenrique-rotcims.vercel.app/register.html';
+              if (window.location.protocol.startsWith('http')) {
+                redirectUrl = new URL('register.html', window.location.href).href;
+              }
+              const { error } = await window.supabaseClient.auth.signInWithOAuth({
+                provider: 'google',
+                options: { redirectTo: redirectUrl }
+              });
+              if (error) throw error;
+            }
+          } catch (err) {
+            console.error("Google sign-in error:", err);
+            alertBox.className = "alert alert-error";
+            alertBox.innerHTML = `<i class="fa-solid fa-triangle-exclamation" style="margin-right:0.5rem;"></i> ${err.message || 'Failed to initialize Google Sign-In.'}`;
+            alertBox.style.display = "flex";
+          }
+        });
       }
-      if (paramName) {
-        const parts = paramName.trim().split(' ');
-        if (parts.length > 0) {
-          const fnEl = document.getElementById('first_name');
-          if (fnEl && !fnEl.value) fnEl.value = parts[0];
+
+      // Check whether an active session already exists (e.g. from Google OAuth)
+      async function checkSessionAndPopulate() {
+        try {
+          const session = await Auth.getSession();
+          if (session && session.user) {
+            // Check whether the Google account is already registered in profiles
+            const profile = await Auth.getProfile();
+            if (profile) {
+              // Account is ALREADY registered: redirect immediately to dashboard
+              alertBox.className = "alert alert-success";
+              alertBox.innerHTML = `<div><i class="fa-solid fa-circle-check" style="font-size:1.25rem; margin-right:0.5rem;"></i> <strong>Already Registered:</strong> Redirecting to your cadet dashboard…</div>`;
+              alertBox.style.display = "flex";
+              setTimeout(() => {
+                window.location.href = profile.role === 'cadet'
+                  ? 'cadet-dashboard.html'
+                  : 'admin-dashboard.html';
+              }, 400);
+              return;
+            }
+
+            // Google account is authenticated but NOT yet registered:
+            // Extract Google account info
+            const userMeta = session.user.user_metadata || {};
+            const googleEmail = session.user.email || userMeta.email || '';
+            let googleFirstName = userMeta.given_name || '';
+            let googleLastName = userMeta.family_name || '';
+
+            if (!googleFirstName || !googleLastName) {
+              const fullName = (userMeta.full_name || userMeta.name || '').trim();
+              if (fullName) {
+                const parts = fullName.split(/\s+/);
+                if (!googleFirstName && parts.length > 0) googleFirstName = parts[0];
+                if (!googleLastName && parts.length > 1) googleLastName = parts.slice(1).join(' ');
+              }
+            }
+
+            // Populate form fields (keeping them editable)
+            if (googleFirstName && firstNameEl && !firstNameEl.value) {
+              firstNameEl.value = googleFirstName;
+            }
+            if (googleLastName && lastNameEl && !lastNameEl.value) {
+              lastNameEl.value = googleLastName;
+            }
+            if (googleEmail && emailEl && !emailEl.value) {
+              emailEl.value = googleEmail;
+            }
+
+            // Password is optional when authenticated via Google OAuth
+            if (passwordEl) {
+              passwordEl.removeAttribute('required');
+              passwordEl.placeholder = "Optional when using Google (min 8 chars if provided)";
+            }
+
+            // Display informative notice
+            alertBox.className = "alert alert-info";
+            alertBox.innerHTML = `
+              <i class="fa-solid fa-circle-check" style="font-size:1.25rem; color:#2563eb; margin-right:0.6rem; flex-shrink:0;"></i>
+              <div>
+                <strong>Google Account Connected:</strong> Your first name, last name, and email have been pre-filled. You may review or edit them, and manually enter your remaining cadet details below.
+              </div>
+            `;
+            alertBox.style.display = "flex";
+          }
+        } catch (err) {
+          console.warn("Session check notice on register page:", err);
         }
-        if (parts.length > 1) {
-          const lnEl = document.getElementById('last_name');
-          if (lnEl && !lnEl.value) lnEl.value = parts.slice(1).join(' ');
+
+        // Also check URL parameters (e.g. redirected from login.html)
+        const paramEmail = urlParams.get('email');
+        const paramFirstName = urlParams.get('first_name');
+        const paramLastName = urlParams.get('last_name');
+        const paramName = urlParams.get('name');
+
+        if (paramEmail && emailEl && !emailEl.value) {
+          emailEl.value = paramEmail;
         }
+        if (paramFirstName && firstNameEl && !firstNameEl.value) {
+          firstNameEl.value = paramFirstName;
+        }
+        if (paramLastName && lastNameEl && !lastNameEl.value) {
+          lastNameEl.value = paramLastName;
+        }
+        if (paramName && (!firstNameEl?.value || !lastNameEl?.value)) {
+          const parts = paramName.trim().split(/\s+/);
+          if (parts.length > 0 && firstNameEl && !firstNameEl.value) firstNameEl.value = parts[0];
+          if (parts.length > 1 && lastNameEl && !lastNameEl.value) lastNameEl.value = parts.slice(1).join(' ');
+        }
+
+        if (urlParams.get('google_signup') === '1' && alertBox.style.display === 'none') {
+          alertBox.className = "alert alert-info";
+          alertBox.innerHTML = `
+            <i class="fa-solid fa-circle-check" style="font-size:1.25rem; color:#2563eb; margin-right:0.6rem; flex-shrink:0;"></i>
+            <div>
+              <strong>Google Account Authenticated:</strong> Please review your pre-filled name and email, and complete your cadet registration details below.
+            </div>
+          `;
+          alertBox.style.display = "flex";
+          if (passwordEl) {
+            passwordEl.removeAttribute('required');
+            passwordEl.placeholder = "Optional when using Google (min 8 chars if provided)";
+          }
+        }
+
+        // CRITICAL REQUIREMENT VERIFICATION:
+        // Automatically populated fields MUST remain editable so the cadet can review and correct them.
+        if (firstNameEl) firstNameEl.readOnly = false;
+        if (lastNameEl) lastNameEl.readOnly = false;
+        if (emailEl) emailEl.readOnly = false;
+      }
+
+      // Run session and prefill check
+      await checkSessionAndPopulate();
+
+      // Listen for OAuth completion if redirect happened on the same page
+      if (window.supabaseClient?.auth) {
+        window.supabaseClient.auth.onAuthStateChange(async (event, session) => {
+          if (event === 'SIGNED_IN' && session) {
+            await checkSessionAndPopulate();
+          }
+        });
       }
 
       form.addEventListener("submit", async (e) => {
@@ -756,6 +936,16 @@
           profile_picture:         selectedPhotoBase64 || null,
         };
 
+        // If password is provided, validate minimum length of 8
+        if (formData.password && formData.password.length < 8) {
+          alertBox.className = "alert alert-error";
+          alertBox.innerHTML = '<i class="fa-solid fa-triangle-exclamation" style="margin-right:0.5rem;"></i> Password must be at least 8 characters long.';
+          alertBox.style.display = "flex";
+          btn.disabled = false;
+          btn.innerHTML = '<i class="fa-solid fa-user-plus"></i> Submit Cadet Enlistment';
+          return;
+        }
+
         try {
           await Auth.register(formData);
 
@@ -763,13 +953,13 @@
           alertBox.innerHTML = `
             <div>
               <i class="fa-solid fa-circle-check" style="font-size: 1.25rem; margin-right: 0.5rem;"></i>
-              <strong>Enlistment Submitted!</strong> Generating your Digital Cadet ID...
+              <strong>Enlistment Submitted!</strong> Account created. Redirecting to your cadet dashboard…
             </div>
           `;
           alertBox.style.display = "flex";
           btn.style.display = "none";
 
-          // Show digital ID card modal
+          // Show digital ID card modal and prepare redirection to dashboard
           setTimeout(() => showCadetIdModal(formData), 600);
 
         } catch (err) {
@@ -986,21 +1176,22 @@
         display:flex; align-items:center; gap:0.5rem; transition:background 0.2s;">
         <i class="fa-solid fa-download"></i> DOWNLOAD ID
       </button>
-      <button onclick="closeIdModal()" style="background:rgba(255,255,255,0.08); border:1px solid rgba(255,255,255,0.2);
-        color:rgba(255,255,255,0.7); padding:0.6rem 1.2rem; border-radius:8px; cursor:pointer;
+      <button onclick="closeIdModal()" id="btn-proceed-dashboard" style="background:#b88e2c; border:none;
+        color:#0a170f; font-weight:700; padding:0.6rem 1.2rem; border-radius:8px; cursor:pointer;
         font-family:'Oswald',sans-serif; letter-spacing:0.08em; font-size:0.85rem;
         display:flex; align-items:center; gap:0.5rem; transition:background 0.2s;">
-        <i class="fa-solid fa-arrow-right-to-bracket"></i> PROCEED TO LOGIN
+        <i class="fa-solid fa-gauge-high"></i> PROCEED TO DASHBOARD
       </button>
     </div>
 
     <div style="font-size:0.7rem; color:rgba(255,255,255,0.3); text-align:center; max-width:360px;">
-      Your digital ID has been generated. Download and present it for ROTC formations.
+      Your digital ID has been generated. Download it for formations, or proceed to your dashboard.
     </div>
   </div><!-- /id-card-modal -->
 
   <script>
     let _idCardFlipped = false;
+    let _redirectTimer = null;
 
     function flipIdCard() {
       _idCardFlipped = !_idCardFlipped;
@@ -1011,6 +1202,12 @@
     function showCadetIdModal(fd) {
       const modal = document.getElementById('id-card-modal');
       modal.style.display = 'flex';
+
+      // Auto-redirect to dashboard after 8 seconds unless user is interacting with ID download
+      if (_redirectTimer) clearTimeout(_redirectTimer);
+      _redirectTimer = setTimeout(() => {
+        closeIdModal();
+      }, 8000);
 
       // Reset flip
       _idCardFlipped = false;
@@ -1058,6 +1255,12 @@
     }
 
     function downloadIdCard() {
+      // Pause automatic redirect while downloading ID
+      if (_redirectTimer) {
+        clearTimeout(_redirectTimer);
+        _redirectTimer = null;
+      }
+
       const flipper = document.getElementById('id-card-flipper');
       const isFront = !_idCardFlipped;
 
@@ -1094,8 +1297,12 @@
     }
 
     function closeIdModal() {
+      if (_redirectTimer) {
+        clearTimeout(_redirectTimer);
+        _redirectTimer = null;
+      }
       document.getElementById('id-card-modal').style.display = 'none';
-      window.location.href = 'login.html';
+      window.location.href = 'cadet-dashboard.html';
     }
   </script>
 

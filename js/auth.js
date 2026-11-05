@@ -154,49 +154,52 @@ const Auth = {
       }
     }
 
-    // 3. Fallback: auto-create pending profile row if missing
-    if (!data) {
-      console.warn("Auto-recovering missing profile for authenticated user:", user.email);
-      const meta = user.user_metadata || {};
-      const generatedId = "CADET-" + user.id.substring(0, 6).toUpperCase();
-      const newProfile = {
-        user_id: user.id,
-        first_name: meta.first_name || (user.email ? user.email.split('@')[0] : "Cadet"),
-        last_name: meta.last_name || "User",
-        student_id: meta.student_id || generatedId,
-        email: (user.email || "").toLowerCase(),
-        role: meta.role || "cadet",
-        status: "approved",
-        course: "General",
-        year_level: "1st Year",
-        section: "1",
-        date_of_birth: "2000-01-01",
-        address: "San Enrique",
-        phone: "09000000000"
-      };
-
-      try {
-        const insertRes = await window.supabaseClient
-          .from("profiles")
-          .insert(newProfile)
-          .select()
-          .maybeSingle();
-
-        if (insertRes.data) {
-          data = insertRes.data;
-        } else if (insertRes.error) {
-          console.error("Auto-recovery insert error:", insertRes.error);
-        }
-      } catch (insertErr) {
-        console.error("Auto-recovery exception:", insertErr);
-      }
-    }
-
     if (!data && error) {
       console.warn("Profile fetch notice:", error.message);
     }
 
     return data || null;
+  },
+
+  // ========================================================================
+  // METHOD: isRegistered(user)
+  // ========================================================================
+  // Checks if a user has an established profile row in the profiles table.
+  // ========================================================================
+  async isRegistered(user = null) {
+    const targetUser = user || (await this.getUser());
+    if (!targetUser) return false;
+    const profile = await this.getProfile();
+    return !!profile;
+  },
+
+  // ========================================================================
+  // METHOD: signInWithGoogle(redirectToPage)
+  // ========================================================================
+  // Initiates Google OAuth authentication using Supabase Auth.
+  // ========================================================================
+  async signInWithGoogle(redirectToPage = 'login.html') {
+    if (!window.supabaseClient || !window.supabaseClient.auth) {
+      throw new Error("Supabase authentication client is not initialized.");
+    }
+    let redirectUrl = 'https://sanenrique-rotcims.vercel.app/' + redirectToPage;
+    if (window.location.protocol.startsWith('http')) {
+      redirectUrl = new URL(redirectToPage, window.location.href).href;
+    }
+
+    const { data, error } = await window.supabaseClient.auth.signInWithOAuth({
+      provider: 'google',
+      options: {
+        redirectTo: redirectUrl,
+        queryParams: {
+          access_type: 'offline',
+          prompt: 'select_account'
+        }
+      }
+    });
+
+    if (error) throw error;
+    return data;
   },
 
   // ========================================================================
@@ -262,38 +265,56 @@ const Auth = {
   async register(formData) {
 
     // ------------------------------------------------------------------
-    // STEP 1 — Create the authentication account (auth.users record)
+    // STEP 1 — Verify or create the authentication account (auth.users)
     // ------------------------------------------------------------------
-    // signUp() creates a new entry in Supabase's internal auth.users table.
-    // This is what enables password-based login. It does NOT store any
-    // application-specific data (name, student ID, etc.) — that's Step 2.
-    const { data: authData, error: authError } = await window.supabaseClient.auth.signUp({
-      email: formData.email.trim().toLowerCase(), // Normalize email format
-      password: formData.password,
-      options: {
+    // Check if the cadet is already authenticated via an active session (e.g. Google OAuth)
+    const session = await this.getSession();
+    let userId = session?.user?.id;
+    let authData = { user: session?.user, session };
+
+    if (!userId) {
+      // Standard email/password signup flow
+      const { data: signUpData, error: authError } = await window.supabaseClient.auth.signUp({
+        email: formData.email.trim().toLowerCase(), // Normalize email format
+        password: formData.password,
+        options: {
+          data: {
+            first_name: formData.first_name,
+            last_name: formData.last_name,
+            student_id: formData.student_id,
+            role: "cadet"
+          }
+        }
+      });
+
+      // If signup failed (e.g., email already registered, weak password, or rate limit),
+      // throw the error immediately and skip Step 2.
+      if (authError) throw authError;
+
+      userId = signUpData.user?.id;
+      authData = signUpData;
+
+      if (!userId) throw new Error("Account creation failed. Please verify email settings.");
+    } else {
+      // User authenticated via Google OAuth:
+      // Update account metadata and optionally update password if provided
+      const updatePayload = {
         data: {
           first_name: formData.first_name,
           last_name: formData.last_name,
           student_id: formData.student_id,
           role: "cadet"
         }
+      };
+      if (formData.password && formData.password.length >= 8) {
+        updatePayload.password = formData.password;
       }
-    });
-
-    // If signup failed (e.g., email already registered, weak password, or rate limit),
-    // throw the error immediately and skip Step 2.
-    if (authError) throw authError;
-
-    // Extract the new user's UUID from the response.
-    // Optional chaining (?.) safely handles the case where authData.user
-    // might be null (can happen if email confirmation is required and the
-    // user already exists but hasn't confirmed yet).
-    const userId = authData.user?.id;
-
-    // If we somehow didn't get a user ID back, throw a descriptive error.
-    // This prevents us from inserting a profile record with a null user_id
-    // which would violate the foreign key constraint in the database.
-    if (!userId) throw new Error("Account creation failed. Please verify email settings.");
+      try {
+        await window.supabaseClient.auth.updateUser(updatePayload);
+      } catch (upErr) {
+        console.warn("Auth user update notice:", upErr);
+      }
+    }
 
     // ------------------------------------------------------------------
     // STEP 2 — Insert the profile record (public.profiles row)
@@ -314,6 +335,8 @@ const Auth = {
       address: formData.address,
       company: formData.company || null,
       platoon: formData.platoon || null,
+      emergency_contact_name: formData.emergency_contact_name || null,
+      emergency_contact_phone: formData.emergency_contact_phone || null,
       profile_picture: formData.profile_picture || null,
 
       // !! SECURITY-CRITICAL LINES !!

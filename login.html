@@ -744,6 +744,51 @@
       const _urlParams = new URLSearchParams(window.location.search);
       const _justLoggedOut = _urlParams.get('logged_out') === '1'
                           || sessionStorage.getItem('rotcims_just_logged_out') === 'true';
+      // ── Function to check registration status and redirect accordingly ──
+      let isRedirecting = false;
+      async function handleAuthenticatedUser(session) {
+        if (!session || !session.user || isRedirecting) return;
+        try {
+          const profile = await Auth.getProfile();
+          if (profile) {
+            isRedirecting = true;
+            // Account is ALREADY registered: redirect to their dashboard
+            if (profile.role === 'cadet' && profile.status !== 'approved') {
+              showAlert(`Your account status is "${profile.status.toUpperCase()}". Please wait for ROTC administrative approval before signing in.`);
+              await Auth.logout();
+              return;
+            }
+            showAlert('✓ Account recognized. Redirecting to your dashboard…', 'info');
+            setTimeout(() => {
+              window.location.href = profile.role === 'cadet'
+                ? 'cadet-dashboard.html'
+                : 'admin-dashboard.html';
+            }, 400);
+            return;
+          } else {
+            isRedirecting = true;
+            // Account is NOT registered: redirect to cadet sign-up form with retrieved Google details
+            showAlert('✓ Google account authenticated! Redirecting to complete your cadet enlistment details…', 'info');
+            const userMeta = session.user?.user_metadata || {};
+            const email    = session.user?.email || userMeta.email || '';
+            const firstName = userMeta.given_name || (userMeta.full_name ? userMeta.full_name.split(' ')[0] : (userMeta.name ? userMeta.name.split(' ')[0] : '')) || '';
+            let lastName = userMeta.family_name || '';
+            if (!lastName && (userMeta.full_name || userMeta.name)) {
+              const nameParts = (userMeta.full_name || userMeta.name).trim().split(' ');
+              if (nameParts.length > 1) {
+                lastName = nameParts.slice(1).join(' ');
+              }
+            }
+            setTimeout(() => {
+              window.location.href = `register.html?google_signup=1&email=${encodeURIComponent(email)}&first_name=${encodeURIComponent(firstName)}&last_name=${encodeURIComponent(lastName)}`;
+            }, 600);
+            return;
+          }
+        } catch (sessErr) {
+          console.warn("Session check error on login load:", sessErr);
+        }
+      }
+
       if (_justLoggedOut) {
         sessionStorage.removeItem('rotcims_just_logged_out');
         if (window.history && window.history.replaceState) {
@@ -752,34 +797,23 @@
         // Don't auto-redirect to dashboard, but CONTINUE executing the rest of the function
         // so form event listeners (submit, oauth) are fully bound and active!
       } else {
-        // Redirect already-logged-in users straight to their dashboard
+        // Check for existing session or incoming OAuth callback
         try {
           const session = await Auth.getSession();
           if (session) {
-            const profile = await Auth.getProfile();
-            if (profile) {
-              if (profile.role === 'cadet' && profile.status !== 'approved') {
-                showAlert(`Your account status is "${profile.status.toUpperCase()}". Please wait for ROTC administrative approval before signing in.`);
-                await Auth.logout();
-                return;
-              }
-              window.location.href = profile.role === 'cadet'
-                ? 'cadet-dashboard.html'
-                : 'admin-dashboard.html';
-              return;
-            } else {
-              showAlert('✓ Google account authenticated! Redirecting to complete your cadet enlistment details…', 'info');
-              const userMeta = session.user?.user_metadata || {};
-              const email    = session.user?.email || '';
-              const name     = userMeta.full_name || userMeta.name || '';
-              setTimeout(() => {
-                window.location.href = `register.html?email=${encodeURIComponent(email)}&name=${encodeURIComponent(name)}`;
-              }, 1500);
-              return;
-            }
+            await handleAuthenticatedUser(session);
           }
         } catch (sessErr) {
           console.warn("Session check error on login load:", sessErr);
+        }
+
+        // Catch OAuth sign-in completion event
+        if (window.supabaseClient?.auth) {
+          window.supabaseClient.auth.onAuthStateChange(async (event, session) => {
+            if (event === 'SIGNED_IN' && session) {
+              await handleAuthenticatedUser(session);
+            }
+          });
         }
       }
 
@@ -883,18 +917,22 @@
       async function triggerOAuthSignIn(provider) {
         hideAlert();
         try {
-          let redirectUrl = 'https://sanenrique-rotcims.vercel.app/login.html';
-          if (window.location.protocol.startsWith('http')) {
-            redirectUrl = window.location.origin + '/login.html';
-          }
-
-          const { error } = await window.supabaseClient.auth.signInWithOAuth({
-            provider: provider,
-            options: {
-              redirectTo: redirectUrl
+          if (provider === 'google' && typeof Auth.signInWithGoogle === 'function') {
+            await Auth.signInWithGoogle('login.html');
+          } else {
+            let redirectUrl = 'https://sanenrique-rotcims.vercel.app/login.html';
+            if (window.location.protocol.startsWith('http')) {
+              redirectUrl = new URL('login.html', window.location.href).href;
             }
-          });
-          if (error) throw error;
+
+            const { error } = await window.supabaseClient.auth.signInWithOAuth({
+              provider: provider,
+              options: {
+                redirectTo: redirectUrl
+              }
+            });
+            if (error) throw error;
+          }
         } catch (err) {
           console.error(`${provider} OAuth error:`, err);
           showAlert(err.message || `Failed to sign in with ${provider}. Ensure it is enabled in your Supabase dashboard.`);
