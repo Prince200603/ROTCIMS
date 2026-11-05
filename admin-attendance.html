@@ -2007,7 +2007,7 @@
       document.getElementById("sess-is-open").checked = !!session.is_open;
       // Restore saved scanner access control type
       const savedType = session.allowed_scanner_type || 'all';
-      const radEdit = document.querySelector(input[name="sess-scanner-type"][value="${savedType}"]);
+      const radEdit = document.querySelector(`input[name="sess-scanner-type"][value="${savedType}"]`);
       if (radEdit) { radEdit.checked = true; highlightScannerOption(); }
       document.getElementById("modal-session").classList.add("active");
     }
@@ -2421,9 +2421,6 @@
       } else {
         showScannerFeedback("default", "Session Updated", "Scanning now records into the selected formation drill.");
       }
-    }
-      await loadModalSessionScans();
-      showScannerFeedback("default", "Session Updated", "Scanning now records into the selected formation drill.");
     }
 
     async function startModalCamera() {
