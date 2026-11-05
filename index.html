@@ -237,6 +237,152 @@
     }
     .home-collage-more:hover { background: rgba(0,0,0,0.5); }
 
+    /* ── Facebook-Style Social Engagement Bar ── */
+    .post-engagement-meta {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0.65rem 1.4rem;
+      border-top: 1px solid #f1f5f9;
+      border-bottom: 1px solid #f1f5f9;
+      font-size: 0.82rem;
+      color: #64748b;
+      background: #ffffff;
+    }
+    .post-engagement-left {
+      display: flex;
+      align-items: center;
+      gap: 0.35rem;
+    }
+    .post-reaction-icons {
+      display: inline-flex;
+      align-items: center;
+      margin-right: 0.35rem;
+    }
+    .post-reaction-icon {
+      width: 20px;
+      height: 20px;
+      border-radius: 50%;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 0.65rem;
+      color: #fff;
+      border: 1.5px solid #fff;
+      margin-left: -4px;
+    }
+    .post-reaction-icon:first-child {
+      margin-left: 0;
+    }
+    .reaction-salute { background: linear-gradient(135deg, #b88e2c, #eab308); }
+    .reaction-heart { background: linear-gradient(135deg, #ef4444, #f43f5e); }
+    .reaction-like { background: linear-gradient(135deg, #1877f2, #3b82f6); }
+    .post-engagement-right {
+      display: flex;
+      align-items: center;
+      gap: 0.85rem;
+      font-size: 0.78rem;
+    }
+    .post-action-bar {
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr;
+      padding: 0.35rem 0.5rem;
+      background: #fafbfa;
+    }
+    .fb-action-btn {
+      background: transparent;
+      border: none;
+      color: #475569;
+      font-size: 0.88rem;
+      font-weight: 700;
+      padding: 0.65rem 0.5rem;
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0.45rem;
+      cursor: pointer;
+      transition: all 0.18s ease;
+      text-decoration: none;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .fb-action-btn:hover,
+    .fb-action-btn:active {
+      background: #f1f5f9;
+      color: #1e293b;
+    }
+    .fb-action-btn.saluted {
+      color: #b88e2c !important;
+      font-weight: 800;
+      animation: saluteBounce 0.35s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+    }
+    @keyframes saluteBounce {
+      0% { transform: scale(1); }
+      50% { transform: scale(1.22); }
+      100% { transform: scale(1); }
+    }
+
+    /* ── Mobile Phone Responsive Social Feed ── */
+    @media (max-width: 768px) {
+      .home-social-feed-wrap {
+        padding: 0 0.25rem;
+      }
+      .home-social-card {
+        border-radius: 12px;
+        margin-bottom: 1.25rem;
+        box-shadow: 0 2px 12px rgba(0,0,0,0.06);
+      }
+      .post-card-banner {
+        padding: 0.75rem 1rem;
+      }
+      .post-banner-logo {
+        width: 38px;
+        height: 38px;
+      }
+      .post-banner-name {
+        font-size: 0.98rem;
+      }
+      .home-social-content {
+        padding: 1rem 1rem 0.85rem;
+      }
+      .home-social-title {
+        font-size: 1.25rem;
+        margin-bottom: 0.5rem;
+      }
+      .home-social-body {
+        font-size: 0.95rem;
+        line-height: 1.65;
+      }
+      .home-collage-grid {
+        border-radius: 0;
+      }
+      .home-collage-grid.count-1 {
+        max-height: 420px;
+      }
+      .home-collage-grid.count-2 {
+        height: 260px;
+      }
+      .home-collage-grid.count-3 {
+        height: 280px;
+      }
+      .home-collage-grid.count-4-plus {
+        grid-template-rows: 160px 160px;
+        height: 320px;
+      }
+      .home-collage-more {
+        font-size: 2.2rem;
+      }
+      .post-engagement-meta {
+        padding: 0.5rem 1rem;
+        font-size: 0.78rem;
+      }
+      .fb-action-btn {
+        font-size: 0.8rem;
+        padding: 0.55rem 0.25rem;
+        gap: 0.35rem;
+      }
+    }
+
     /* Lightbox Modal */
     #home-lightbox-modal {
       display: none;
@@ -1161,6 +1307,35 @@ With honor and discipline, Your San Enrique ROTC Family 🫡`,
               ${imagesArr.length > 0 ? `
                 <div id="home-collage-${post.id}"></div>
               ` : ''}
+
+              <!-- Engagement Meta (Facebook style) -->
+              <div class="post-engagement-meta">
+                <div class="post-engagement-left">
+                  <span class="post-reaction-icons">
+                    <span class="post-reaction-icon reaction-salute"><i class="fa-solid fa-medal"></i></span>
+                    <span class="post-reaction-icon reaction-like"><i class="fa-solid fa-thumbs-up"></i></span>
+                    <span class="post-reaction-icon reaction-heart"><i class="fa-solid fa-heart"></i></span>
+                  </span>
+                  <span id="salute-count-${post.id || idx}">Saluted by 48 cadets</span>
+                </div>
+                <div class="post-engagement-right">
+                  <span><i class="fa-regular fa-comment"></i> 8 Inquiries</span>
+                  <span><i class="fa-solid fa-share"></i> 15 Shares</span>
+                </div>
+              </div>
+
+              <!-- Action Bar (Facebook style) -->
+              <div class="post-action-bar">
+                <button type="button" class="fb-action-btn" id="salute-btn-${post.id || idx}" onclick="handleSocialSalute('${post.id || idx}')">
+                  <i class="fa-solid fa-medal"></i> <span>Salute</span>
+                </button>
+                <a href="contact.html" class="fb-action-btn">
+                  <i class="fa-regular fa-comment-dots"></i> <span>Inquire</span>
+                </a>
+                <button type="button" class="fb-action-btn" onclick="handleSocialShare('${escapeHtml(post.title)}', '${post.id || idx}')">
+                  <i class="fa-solid fa-share"></i> <span>Share</span>
+                </button>
+              </div>
             </div>
           `;
         }).join('');
@@ -1213,6 +1388,35 @@ May this training assembly remind each cadet of the honor and responsibility we 
 With honor and discipline, Your San Enrique ROTC Family 🫡</div>
               </div>
               <div id="home-fallback-collage"></div>
+
+              <!-- Engagement Meta (Facebook style) -->
+              <div class="post-engagement-meta">
+                <div class="post-engagement-left">
+                  <span class="post-reaction-icons">
+                    <span class="post-reaction-icon reaction-salute"><i class="fa-solid fa-medal"></i></span>
+                    <span class="post-reaction-icon reaction-like"><i class="fa-solid fa-thumbs-up"></i></span>
+                    <span class="post-reaction-icon reaction-heart"><i class="fa-solid fa-heart"></i></span>
+                  </span>
+                  <span id="salute-count-fallback">Saluted by 48 cadets</span>
+                </div>
+                <div class="post-engagement-right">
+                  <span><i class="fa-regular fa-comment"></i> 8 Inquiries</span>
+                  <span><i class="fa-solid fa-share"></i> 15 Shares</span>
+                </div>
+              </div>
+
+              <!-- Action Bar (Facebook style) -->
+              <div class="post-action-bar">
+                <button type="button" class="fb-action-btn" id="salute-btn-fallback" onclick="handleSocialSalute('fallback')">
+                  <i class="fa-solid fa-medal"></i> <span>Salute</span>
+                </button>
+                <a href="contact.html" class="fb-action-btn">
+                  <i class="fa-regular fa-comment-dots"></i> <span>Inquire</span>
+                </a>
+                <button type="button" class="fb-action-btn" onclick="handleSocialShare('A MILESTONE FILLED WITH DISCIPLINE, HONOR, AND PRIDE 🫡 🇵🇭', 'fallback')">
+                  <i class="fa-solid fa-share"></i> <span>Share</span>
+                </button>
+              </div>
             </div>
           `;
           const c = document.getElementById('home-fallback-collage');
@@ -1280,6 +1484,60 @@ With honor and discipline, Your San Enrique ROTC Family 🫡</div>
         body.classList.add('collapsed');
         btn.innerHTML = '<span>See more</span> <i class="fa-solid fa-chevron-down" style="font-size:0.75rem;"></i>';
       }
+    }
+
+    // ── Facebook-Style Social Engagement Handlers ────────────────────
+    function handleSocialSalute(postId) {
+      const storageKey = 'rotcims_saluted_' + postId;
+      const isSaluted = localStorage.getItem(storageKey) === 'true';
+      const btn = document.getElementById('salute-btn-' + postId);
+      const countEl = document.getElementById('salute-count-' + postId);
+
+      const baseSalutes = 48;
+      if (isSaluted) {
+        localStorage.removeItem(storageKey);
+        if (btn) btn.classList.remove('saluted');
+        if (countEl) countEl.textContent = `Saluted by ${baseSalutes} cadets`;
+      } else {
+        localStorage.setItem(storageKey, 'true');
+        if (btn) btn.classList.add('saluted');
+        if (countEl) countEl.textContent = `You and ${baseSalutes} others saluted`;
+      }
+    }
+
+    async function handleSocialShare(title, postId) {
+      const shareUrl = window.location.origin + window.location.pathname + '#post-' + postId;
+      if (navigator.share) {
+        try {
+          await navigator.share({
+            title: title || 'ROTCIMS Official Notice',
+            text: 'Official Unit Dispatch from 604th CDC San Enrique ROTC',
+            url: shareUrl
+          });
+          return;
+        } catch (e) {
+          // User cancelled
+        }
+      }
+      if (navigator.clipboard) {
+        await navigator.clipboard.writeText(shareUrl);
+        showHomeShareToast("Official post link copied to clipboard!");
+      } else {
+        showHomeShareToast("Notice link: " + shareUrl);
+      }
+    }
+
+    function showHomeShareToast(msg) {
+      let toast = document.getElementById('home-social-toast');
+      if (!toast) {
+        toast = document.createElement('div');
+        toast.id = 'home-social-toast';
+        toast.style.cssText = 'position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:#0d2818;color:#fef08a;border:1.5px solid var(--brass);padding:0.75rem 1.4rem;border-radius:24px;font-weight:700;font-size:0.9rem;box-shadow:0 8px 24px rgba(0,0,0,0.4);z-index:99999;transition:opacity 0.3s;pointer-events:none;';
+        document.body.appendChild(toast);
+      }
+      toast.textContent = msg;
+      toast.style.opacity = '1';
+      setTimeout(() => { if (toast) toast.style.opacity = '0'; }, 3000);
     }
 
     // ── Home Lightbox ─────────────────────────────────────────────────
