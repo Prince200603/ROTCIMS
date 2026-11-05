@@ -88,41 +88,6 @@
       overflow: hidden;
     }
 
-    .step-banner {
-      background: #f9fafb;
-      border-bottom: 1px solid #e5e7eb;
-      padding: 1.25rem 2.5rem;
-      display: flex;
-      justify-content: space-between;
-      gap: 1rem;
-      flex-wrap: wrap;
-    }
-
-    .step-item {
-      display: flex;
-      align-items: center;
-      gap: 0.6rem;
-      font-size: 0.84rem;
-      font-weight: 600;
-      color: #4b5563;
-    }
-
-    .step-item.active {
-      color: #1e3a29;
-    }
-
-    .step-num {
-      width: 26px;
-      height: 26px;
-      border-radius: 50%;
-      background: #b88e2c;
-      color: #fff;
-      display: grid;
-      place-items: center;
-      font-size: 0.75rem;
-      font-weight: 700;
-    }
-
     /* ====== 2-COLUMN SPLIT GRID (EXPANDED SIDE) ====== */
     .reg-split-grid {
       display: grid;
@@ -383,25 +348,6 @@
   <div class="reg-container">
     <div class="reg-card">
 
-      <!-- Step Indicator Banner -->
-      <div class="step-banner">
-        <div class="step-item active">
-          <div class="step-num"><i class="fa-solid fa-camera" style="font-size: 0.7rem;"></i></div>
-          <span>Profile Photo</span>
-        </div>
-        <div class="step-item active">
-          <div class="step-num">1</div>
-          <span>Cadet Identity</span>
-        </div>
-        <div class="step-item active">
-          <div class="step-num">2</div>
-          <span>Contact &amp; Emergency</span>
-        </div>
-        <div class="step-item active">
-          <div class="step-num">3</div>
-          <span>Account Credentials</span>
-        </div>
-      </div>
 
       <div style="padding: 2.25rem;">
         <div id="alert-box" class="alert" style="display: none; margin-bottom: 1.5rem;"></div>
@@ -814,15 +760,6 @@
               passwordConfirmEl.placeholder = "Re-enter password (optional)";
             }
 
-            // Display informative notice
-            alertBox.className = "alert alert-info";
-            alertBox.innerHTML = `
-              <i class="fa-solid fa-circle-check" style="font-size:1.25rem; color:#2563eb; margin-right:0.6rem; flex-shrink:0;"></i>
-              <div>
-                <strong>Google Account Connected:</strong> Your first name, last name, and email have been pre-filled. You may review or edit them, and manually enter your remaining cadet details below.
-              </div>
-            `;
-            alertBox.style.display = "flex";
           }
         } catch (err) {
           console.warn("Session check notice on register page:", err);
@@ -849,15 +786,7 @@
           if (parts.length > 1 && lastNameEl && !lastNameEl.value) lastNameEl.value = parts.slice(1).join(' ');
         }
 
-        if (urlParams.get('google_signup') === '1' && alertBox.style.display === 'none') {
-          alertBox.className = "alert alert-info";
-          alertBox.innerHTML = `
-            <i class="fa-solid fa-circle-check" style="font-size:1.25rem; color:#2563eb; margin-right:0.6rem; flex-shrink:0;"></i>
-            <div>
-              <strong>Google Account Authenticated:</strong> Please review your pre-filled name and email, and complete your cadet registration details below.
-            </div>
-          `;
-          alertBox.style.display = "flex";
+        if (urlParams.get('google_signup') === '1') {
           if (passwordEl) {
             passwordEl.removeAttribute('required');
             passwordEl.placeholder = "Enter password (optional with Google)";
