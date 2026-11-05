@@ -134,3 +134,44 @@
 
 // End of IIFE — the parentheses at the end immediately invoke this function.
 })();
+
+// ==========================================================================
+// SECTION 7 — Compact Shrinking Header on Scroll (Mobile Only)
+// --------------------------------------------------------------------------
+// When the user scrolls down more than 60px on a mobile screen (≤ 900px),
+// we add the class .header-compact to .site-header.
+// The CSS in responsive.css uses this class to shrink the header height,
+// logo size, and brand text — giving more visible screen space to content.
+//
+// We only activate this on mobile screens. On desktop the header is already
+// well-proportioned and should not change on scroll.
+// ==========================================================================
+(function () {
+  var header = document.querySelector('.site-header');
+  if (!header) return;
+
+  // Scroll threshold in pixels before the compact class is applied.
+  var SCROLL_THRESHOLD = 60;
+
+  function handleHeaderScroll() {
+    // Only apply compact mode on screens ≤ 900px (mobile/tablet).
+    if (window.innerWidth > 900) {
+      header.classList.remove('header-compact');
+      return;
+    }
+    if (window.scrollY > SCROLL_THRESHOLD) {
+      header.classList.add('header-compact');
+    } else {
+      header.classList.remove('header-compact');
+    }
+  }
+
+  // Use passive: true for better scroll performance on mobile.
+  window.addEventListener('scroll', handleHeaderScroll, { passive: true });
+
+  // Also re-evaluate on resize (e.g., user rotates phone).
+  window.addEventListener('resize', handleHeaderScroll, { passive: true });
+
+  // Run once on page load in case the user refreshed mid-page.
+  handleHeaderScroll();
+})();

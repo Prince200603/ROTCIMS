@@ -1413,3 +1413,708 @@
 
   font-size: 1.1rem; /* Size of the hamburger (☰) or close (✕) icon character */
 }
+
+
+/* ==========================================================================
+   BREAKPOINT: PHONE ONLY (max-width: 480px)
+   --------------------------------------------------------------------------
+   These rules are specifically for small mobile phones (portrait mode).
+   They are MORE aggressive than the tablet + mobile rules above, targeting
+   only devices ≤ 480px wide. They override or supplement the max-width:900px
+   rules to give phones an ultra-compact, thumb-friendly experience.
+
+   Tablet users (481px–900px) get the base tablet styles above but NOT these
+   extra phone-specific overrides — avoiding over-compaction on larger tablets.
+   ==========================================================================*/
+@media (max-width: 480px) {
+
+  /* ════════════════════════════════════════════════════════════════════════
+     PUBLIC WEBSITE — PHONE LAYOUT IMPROVEMENTS
+     ════════════════════════════════════════════════════════════════════════*/
+
+  /* ── 1. Compact Sticky Header (Normal State on Phone) ────────────────── */
+  .site-header {
+    padding: 0.55rem 0.9rem !important;
+    gap: 0.6rem !important;
+  }
+
+  .brand {
+    font-size: 0.92rem !important;
+    gap: 0.5rem !important;
+  }
+
+  .brand img {
+    height: 30px !important;
+    width: 30px !important;
+  }
+
+  .brand-text span {
+    font-size: 0.58rem !important;
+  }
+
+  /* ── 2. Compact Shrinking Header (.header-compact added by nav.js scroll) */
+  /* When the user scrolls past 60px, nav.js adds .header-compact.
+     This makes the header even smaller to maximise visible content area.    */
+  .site-header.header-compact {
+    padding: 0.3rem 0.9rem !important;
+    box-shadow: 0 1px 6px rgba(0, 0, 0, 0.3) !important;
+    transition: padding 0.25s ease, box-shadow 0.25s ease !important;
+  }
+
+  .site-header.header-compact .brand img {
+    height: 24px !important;
+    width: 24px !important;
+    transition: height 0.25s ease, width 0.25s ease !important;
+  }
+
+  .site-header.header-compact .brand {
+    font-size: 0.82rem !important;
+    transition: font-size 0.25s ease !important;
+  }
+
+  .site-header.header-compact .brand-text span {
+    display: none !important; /* hide subtitle in compact mode */
+  }
+
+  /* Smooth transition for normal header state too */
+  .site-header {
+    transition: padding 0.25s ease, box-shadow 0.25s ease;
+  }
+
+  /* ── 3. Hero Section: Phone-Optimised ─────────────────────────────────── */
+  .hero-section {
+    min-height: 85vh !important;
+    padding: 4.5rem 1rem 2.5rem !important;
+  }
+
+  .hero-title {
+    font-size: 1.55rem !important;
+    line-height: 1.25 !important;
+    margin-bottom: 0.65rem !important;
+  }
+
+  .hero-subtitle {
+    font-size: 0.88rem !important;
+    line-height: 1.55 !important;
+    margin-bottom: 1.25rem !important;
+  }
+
+  .hero-badge {
+    font-size: 0.72rem !important;
+    padding: 0.3rem 0.75rem !important;
+    margin-bottom: 0.85rem !important;
+  }
+
+  .hero-actions {
+    flex-direction: column !important;
+    align-items: stretch !important;
+    gap: 0.65rem !important;
+    width: 100% !important;
+  }
+
+  .btn-hero,
+  .btn-hero-outline {
+    width: 100% !important;
+    max-width: 100% !important;
+    padding: 0.8rem 1rem !important;
+    font-size: 0.9rem !important;
+    justify-content: center !important;
+    border-radius: 12px !important;
+  }
+
+  .hero-tactical-dock {
+    flex-wrap: wrap !important;
+    gap: 0.5rem !important;
+    justify-content: center !important;
+    margin-top: 1.5rem !important;
+  }
+
+  /* ── 4. Section Headings ───────────────────────────────────────────────── */
+  .section-heading {
+    font-size: 1.3rem !important;
+    margin-bottom: 0.65rem !important;
+  }
+
+  .section-heading::after {
+    width: 42px !important;
+    height: 3px !important;
+  }
+
+  /* ── 5. Stats Strip ────────────────────────────────────────────────────── */
+  .stats-strip-inner {
+    grid-template-columns: 1fr 1fr !important;
+    gap: 1rem !important;
+  }
+
+  .stat-number {
+    font-size: 1.75rem !important;
+  }
+
+  /* ── 6. Announcement Cards ────────────────────────────────────────────── */
+  .announcement-card {
+    padding: 0.9rem 1rem !important;
+    border-radius: 12px !important;
+  }
+
+  .announcement-card h3 {
+    font-size: 0.95rem !important;
+    line-height: 1.4 !important;
+  }
+
+  .announcement-card p {
+    font-size: 0.82rem !important;
+  }
+
+  /* ── 7. Home Social Feed (Facebook-style Post Cards) ─────────────────── */
+  .home-social-feed-wrap {
+    padding: 0 0.1rem !important;
+  }
+
+  .post-card-banner {
+    padding: 0.6rem 0.85rem !important;
+  }
+
+  .post-banner-logo {
+    width: 36px !important;
+    height: 36px !important;
+  }
+
+  .post-banner-name {
+    font-size: 0.88rem !important;
+  }
+
+  .post-banner-meta {
+    font-size: 0.72rem !important;
+  }
+
+  .home-social-content {
+    padding: 0 0.85rem 0.65rem !important;
+  }
+
+  .home-social-title {
+    font-size: 0.95rem !important;
+  }
+
+  .home-social-body {
+    font-size: 0.84rem !important;
+    line-height: 1.55 !important;
+  }
+
+  /* ── 8. Site Footer: Single Column ──────────────────────────────────────*/
+  .footer-grid {
+    grid-template-columns: 1fr !important;
+    gap: 1.5rem !important;
+  }
+
+  .footer-brand {
+    grid-column: 1 !important;
+  }
+
+  .footer-bottom {
+    flex-direction: column !important;
+    text-align: center !important;
+    gap: 0.5rem !important;
+    font-size: 0.78rem !important;
+  }
+
+  .site-footer {
+    padding: 2.5rem 1rem 1.5rem !important;
+  }
+
+  /* ── 9. Navigation Dropdown on Phone ─────────────────────────────────── */
+  .site-header .nav-links a {
+    padding: 0.6rem 0.9rem !important;
+    font-size: 0.9rem !important;
+  }
+
+  .site-header .nav-btn {
+    padding: 0.6rem 1rem !important;
+    font-size: 0.88rem !important;
+  }
+
+
+  /* ════════════════════════════════════════════════════════════════════════
+     ADMIN PORTAL — PHONE LAYOUT IMPROVEMENTS
+     ════════════════════════════════════════════════════════════════════════*/
+
+  /* ── 10. KPI Deck: 2-Column on Phone ──────────────────────────────────── */
+  .kpi-deck {
+    grid-template-columns: 1fr 1fr !important;
+    gap: 0.6rem !important;
+  }
+
+  /* Total card spans full width for prominence */
+  .kpi-deck .kpi-total {
+    grid-column: 1 / -1 !important;
+  }
+
+  .kpi-value {
+    font-size: 1.5rem !important;
+  }
+
+  .kpi-label {
+    font-size: 0.72rem !important;
+  }
+
+  .kpi-icon-wrap {
+    width: 36px !important;
+    height: 36px !important;
+    font-size: 1rem !important;
+  }
+
+  .kpi-card {
+    padding: 0.75rem 0.85rem !important;
+    border-radius: 14px !important;
+  }
+
+  /* ── 11. Admin Dashboard Metric Grid (generic .metric-grid) ───────────── */
+  .metric-grid {
+    grid-template-columns: 1fr 1fr !important;
+    gap: 0.6rem !important;
+  }
+
+  /* ── 12. Command Toolbar: Stack Buttons ───────────────────────────────── */
+  .command-toolbar {
+    flex-direction: column !important;
+    gap: 0.6rem !important;
+  }
+
+  .command-toolbar .btn {
+    width: 100% !important;
+    min-height: 44px !important;
+    font-size: 0.86rem !important;
+    justify-content: center !important;
+    border-radius: 12px !important;
+  }
+
+  /* ── 13. Card Padding on Phone ────────────────────────────────────────── */
+  .portal-layout .card {
+    padding: 0.75rem 0.85rem !important;
+    border-radius: 14px !important;
+    margin-bottom: 0.75rem !important;
+  }
+
+  /* ── 14. Table Cell Text: Compact on Phone ────────────────────────────── */
+  .table th,
+  .table td,
+  table th,
+  table td {
+    font-size: 0.76rem !important;
+    padding: 0.5rem 0.6rem !important;
+  }
+
+  /* ── 15. Activity Feed / Recent Events ───────────────────────────────── */
+  .activity-item,
+  .recent-item {
+    padding: 0.65rem 0 !important;
+    gap: 0.65rem !important;
+  }
+
+  .activity-icon,
+  .recent-icon {
+    width: 34px !important;
+    height: 34px !important;
+    font-size: 0.85rem !important;
+    flex-shrink: 0 !important;
+  }
+
+  .activity-text,
+  .recent-text {
+    font-size: 0.82rem !important;
+  }
+
+  /* ── 16. Admin Page / Content Body Padding ────────────────────────────── */
+  .portal-layout .content-body {
+    padding: 0.65rem 0.65rem 90px !important;
+  }
+
+  /* ── 17. Form Labels and Inputs in Admin Modal ────────────────────────── */
+  .form-group label,
+  .form-label {
+    font-size: 0.82rem !important;
+  }
+
+  .form-group .form-control,
+  .form-control {
+    font-size: 16px !important; /* prevents zoom on iOS */
+    padding: 0.6rem 0.85rem !important;
+    min-height: 44px !important;
+  }
+
+  /* ── 18. Section Headers Inside Cards ─────────────────────────────────── */
+  .card-header h2,
+  .card-header h3 {
+    font-size: 1rem !important;
+  }
+
+  /* ── 19. Badge & Status Pills ─────────────────────────────────────────── */
+  .badge,
+  .status-badge {
+    font-size: 0.68rem !important;
+    padding: 0.2rem 0.5rem !important;
+  }
+
+
+  /* ════════════════════════════════════════════════════════════════════════
+     CADET PORTAL — PHONE LAYOUT IMPROVEMENTS
+     ════════════════════════════════════════════════════════════════════════*/
+
+  /* ── 20. Cadet Welcome / Dashboard Hero Card ──────────────────────────── */
+  .cadet-welcome-card,
+  .welcome-banner,
+  .dashboard-welcome {
+    padding: 0.9rem 1rem !important;
+    border-radius: 14px !important;
+  }
+
+  /* Stack avatar + name vertically on very small phones */
+  .cadet-welcome-inner,
+  .welcome-inner {
+    flex-direction: column !important;
+    align-items: flex-start !important;
+    gap: 0.65rem !important;
+  }
+
+  .cadet-welcome-avatar,
+  .welcome-avatar {
+    width: 52px !important;
+    height: 52px !important;
+    font-size: 1.1rem !important;
+  }
+
+  .cadet-welcome-name,
+  .welcome-name {
+    font-size: 1.1rem !important;
+  }
+
+  .cadet-welcome-rank,
+  .welcome-rank {
+    font-size: 0.75rem !important;
+  }
+
+  /* ── 21. Cadet Attendance Stat Circles ───────────────────────────────── */
+  .mobile-stat-circle {
+    width: 28px !important;
+    height: 28px !important;
+    font-size: 0.72rem !important;
+  }
+
+  .mobile-stat-num {
+    font-size: 1rem !important;
+  }
+
+  .mobile-stat-label {
+    font-size: 0.6rem !important;
+  }
+
+  /* ── 22. Cadet Quick Action Buttons ──────────────────────────────────── */
+  .mobile-quick-actions-row {
+    grid-template-columns: 1fr 1fr !important;
+    gap: 0.5rem !important;
+  }
+
+  .mobile-qa-tile {
+    padding: 0.75rem 0.4rem !important;
+    font-size: 0.74rem !important;
+    border-radius: 12px !important;
+  }
+
+  .mobile-qa-tile .qa-icon {
+    font-size: 1.15rem !important;
+    margin-bottom: 0.3rem !important;
+  }
+
+  /* ── 23. Cadet Digital ID Card ──────────────────────────────────────── */
+  .cadet-id-card,
+  .id-card-wrapper {
+    max-width: 100% !important;
+    border-radius: 16px !important;
+    padding: 1rem !important;
+  }
+
+  .cadet-qr-box {
+    width: 180px !important;
+    height: 180px !important;
+    padding: 8px !important;
+    margin: 0 auto !important;
+    border-radius: 12px !important;
+  }
+
+  .cadet-id-name {
+    font-size: 1.05rem !important;
+  }
+
+  .cadet-id-rank,
+  .cadet-id-section {
+    font-size: 0.78rem !important;
+  }
+
+  /* ── 24. Cadet Profile Page Info Fields ──────────────────────────────── */
+  .profile-field-label {
+    font-size: 0.75rem !important;
+  }
+
+  .profile-field-value {
+    font-size: 0.88rem !important;
+  }
+
+  .profile-avatar,
+  .cadet-avatar-lg {
+    width: 72px !important;
+    height: 72px !important;
+    font-size: 1.3rem !important;
+  }
+
+  /* ── 25. Cadet Attendance Record List ───────────────────────────────── */
+  .mobile-cadet-item-card {
+    padding: 0.75rem 0.85rem !important;
+    gap: 0.7rem !important;
+    border-radius: 14px !important;
+  }
+
+  .mobile-cadet-avatar-img {
+    width: 40px !important;
+    height: 40px !important;
+  }
+
+  .mobile-cadet-title {
+    font-size: 0.9rem !important;
+  }
+
+  .mobile-cadet-sub {
+    font-size: 0.7rem !important;
+  }
+
+  .mobile-cadet-time {
+    font-size: 0.65rem !important;
+  }
+
+  /* ── 26. Mobile Session Banner Card ─────────────────────────────────── */
+  .mobile-session-banner-card {
+    padding: 0.9rem 1rem !important;
+    border-radius: 14px !important;
+  }
+
+  .mobile-session-banner-card .session-title {
+    font-size: 1rem !important;
+  }
+
+  .mobile-session-banner-card .session-time-sub {
+    font-size: 0.74rem !important;
+  }
+
+  /* ── 27. Mobile Bottom Navigation: Safe Area Aware ──────────────────── */
+  .portal-mobile-bottom-nav {
+    height: calc(58px + env(safe-area-inset-bottom, 0px)) !important;
+  }
+
+  .portal-mob-tab {
+    font-size: 0.58rem !important;
+    padding: 0.3rem 0.1rem !important;
+  }
+
+  .portal-mob-tab i {
+    font-size: 1.15rem !important;
+  }
+
+  /* ── 28. Mobile More Menu Sheet (Full-screen overlay) ───────────────── */
+  .mobile-more-header h2 {
+    font-size: 1.35rem !important;
+  }
+
+  .mobile-more-item {
+    padding: 0.85rem 1rem !important;
+    font-size: 0.88rem !important;
+  }
+
+  /* ── 29. Mobile Cadet Card (Cadets list view) ───────────────────────── */
+  .mobile-cadet-card {
+    padding: 0.85rem 0.95rem !important;
+    border-radius: 14px !important;
+  }
+
+  .mobile-cadet-name {
+    font-size: 0.95rem !important;
+  }
+
+  .mobile-cadet-meta,
+  .mobile-cadet-section {
+    font-size: 0.72rem !important;
+  }
+
+  .mobile-cadet-avatar {
+    width: 42px !important;
+    height: 42px !important;
+    font-size: 1rem !important;
+  }
+
+  /* ── 30. Touch Action Buttons: Comfortable Tap Targets ──────────────── */
+  .btn-touch-approve,
+  .btn-touch-reject,
+  .btn-touch-view {
+    padding: 0.6rem 0.65rem !important;
+    font-size: 0.82rem !important;
+    border-radius: 10px !important;
+    min-height: 42px !important;
+  }
+
+  .btn-touch-action-scanner {
+    padding: 0.75rem 0.85rem !important;
+    font-size: 0.88rem !important;
+    border-radius: 12px !important;
+    min-height: 46px !important;
+  }
+
+  .btn-touch-action-manual,
+  .btn-touch-action-session {
+    padding: 0.65rem 0.75rem !important;
+    font-size: 0.8rem !important;
+    min-height: 42px !important;
+  }
+
+  /* ── 31. Mobile Search Input (Phone-Specific) ───────────────────────── */
+  .mobile-search-input {
+    padding: 0.65rem 0.9rem 0.65rem 2.4rem !important;
+    font-size: 0.84rem !important;
+    border-radius: 10px !important;
+    min-height: 44px !important;
+  }
+
+  /* ── 32. Pill Filter Items (Smaller on Phone) ───────────────────────── */
+  .pill-filter-item {
+    padding: 0.38rem 0.85rem !important;
+    font-size: 0.74rem !important;
+  }
+
+  /* ── 33. Mobile Dashboard Hero Text ─────────────────────────────────── */
+  .mobile-hero-greeting {
+    font-size: 0.98rem !important;
+  }
+
+  .mobile-hero-motto {
+    font-size: 0.7rem !important;
+  }
+
+  .mobile-hero-left img,
+  img.mobile-hero-crest,
+  .mobile-hero-crest {
+    width: 38px !important;
+    height: 38px !important;
+  }
+
+  .mobile-hero-bell {
+    width: 36px !important;
+    height: 36px !important;
+    font-size: 0.9rem !important;
+  }
+
+  /* ── 34. Mobile Floating Toast ──────────────────────────────────────── */
+  #mobile-floating-toast {
+    left: 0.65rem !important;
+    right: 0.65rem !important;
+    font-size: 0.88rem !important;
+    padding: 0.75rem 1rem !important;
+    border-radius: 12px !important;
+  }
+
+  /* ── 35. Modal Bottom Sheet on Phone ──────────────────────────────────*/
+  .modal-content,
+  .modal-scanner-dialog,
+  .modal-excel-dialog,
+  .modal-spreadsheet-dialog {
+    max-height: 92vh !important;
+  }
+
+  .modal-header h3 {
+    font-size: 1rem !important;
+  }
+
+  .modal-body {
+    padding: 1rem !important;
+  }
+
+  .modal-footer {
+    padding: 0.75rem 1rem calc(0.75rem + env(safe-area-inset-bottom, 0px)) !important;
+  }
+
+  .modal-footer .btn {
+    min-height: 44px !important;
+    font-size: 0.9rem !important;
+  }
+
+  /* ── 36. Roster Header Row (Phone Compact) ──────────────────────────── */
+  .mobile-roster-header-row {
+    padding: 0 !important;
+    margin-bottom: 0.6rem !important;
+  }
+
+} /* End @media (max-width: 480px) */
+
+
+/* ==========================================================================
+   TABLET-ONLY REFINEMENTS (481px – 900px)
+   --------------------------------------------------------------------------
+   These rules apply ONLY to tablets in portrait/landscape mode.
+   They fine-tune elements that are TOO small when the phone rules aren't
+   applied, ensuring tablets still look comfortable and not over-compacted.
+   The phone breakpoint above (≤480px) does NOT apply here.
+   ==========================================================================*/
+@media (min-width: 481px) and (max-width: 900px) {
+
+  /* Tablet: 2×2 KPI grid with more space than on a phone */
+  .kpi-deck {
+    grid-template-columns: repeat(2, 1fr) !important;
+    gap: 0.85rem !important;
+  }
+
+  .kpi-value {
+    font-size: 1.75rem !important;
+  }
+
+  /* Tablet: 2-column metric grid */
+  .metric-grid {
+    grid-template-columns: 1fr 1fr !important;
+    gap: 0.85rem !important;
+  }
+
+  /* Tablet: Hero title slightly larger than phone */
+  .hero-title {
+    font-size: 1.9rem !important;
+  }
+
+  /* Tablet: Section heading */
+  .section-heading {
+    font-size: 1.5rem !important;
+  }
+
+  /* Tablet: Footer 2-column */
+  .footer-grid {
+    grid-template-columns: 1fr 1fr !important;
+    gap: 1.75rem !important;
+  }
+
+  /* Tablet: Content body has more horizontal padding */
+  .portal-layout .content-body {
+    padding: 1rem 1rem 90px !important;
+  }
+
+  /* Tablet: Quick action tiles stay as 3-column grid */
+  .mobile-quick-actions-row {
+    grid-template-columns: repeat(3, 1fr) !important;
+  }
+
+  /* Tablet: Compact header — slightly larger than phone */
+  .site-header.header-compact {
+    padding: 0.4rem 1rem !important;
+  }
+
+  .site-header.header-compact .brand img {
+    height: 28px !important;
+    width: 28px !important;
+  }
+
+  .site-header.header-compact .brand {
+    font-size: 0.9rem !important;
+  }
+
+} /* End @media tablet (481px–900px) */
