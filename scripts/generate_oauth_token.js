@@ -37,7 +37,7 @@ const authUrl = oauth2Client.generateAuthUrl({
 
 console.log('\n╔══════════════════════════════════════════════════════════════╗');
 console.log('║        ROTCIMS — Google Drive OAuth 2.0 Authorizer           ║');
-╚══════════════════════════════════════════════════════════════╝\n');
+console.log('╚══════════════════════════════════════════════════════════════╝\n');
 console.log('1. Open this URL in your phone/computer browser:\n');
 console.log(authUrl);
 console.log('\n2. Sign in with your Google account and tap "Allow".');
