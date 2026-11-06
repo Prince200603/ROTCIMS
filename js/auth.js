@@ -338,6 +338,8 @@ const Auth = {
       emergency_contact_name: formData.emergency_contact_name || null,
       emergency_contact_phone: formData.emergency_contact_phone || null,
       profile_picture: formData.profile_picture || null,
+      drive_photo_id: formData.drive_photo_id || null,
+      drive_photo_url: formData.drive_photo_url || null,
 
       // !! SECURITY-CRITICAL LINES !!
       role: "cadet",      // Public sign-up is always 'cadet'
@@ -558,12 +560,18 @@ const Auth = {
 
     if (avatarEl) {
       // Build initials from the first character of first and last name.
-      // `|| ""` provides an empty string fallback if either name is missing,
-      // preventing "undefined"[0] from returning "u" as an initial.
-      const initials = `${profile.first_name[0] || ""}${profile.last_name[0] || ""}`;
+      const initials = `${profile.first_name?.[0] || ""}${profile.last_name?.[0] || ""}`.toUpperCase() || "CD";
+      const photoUrl = profile.drive_photo_url || 
+        (profile.drive_photo_id ? `https://drive.google.com/thumbnail?id=${profile.drive_photo_id}&sz=w100` : null) ||
+        (profile.profile_picture && profile.profile_picture.length > 20 ? profile.profile_picture : null);
 
-      // Display initials in uppercase inside the circular avatar element.
-      avatarEl.textContent = initials.toUpperCase();
+      if (photoUrl) {
+        avatarEl.style.overflow = "hidden";
+        avatarEl.style.padding = "0";
+        avatarEl.innerHTML = `<img src="${photoUrl}" alt="${initials}" style="width:100%;height:100%;object-fit:cover;border-radius:50%;display:block;" onerror="this.parentElement.textContent='${initials}'">`;
+      } else {
+        avatarEl.textContent = initials;
+      }
     }
 
     // Auto-inject Theme Toggle in .top-bar if missing

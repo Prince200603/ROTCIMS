@@ -43,6 +43,7 @@
   <!-- Supabase client library -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="js/config.js"></script>
+  <script src="js/drive-storage.js"></script>
   <script src="js/auth.js"></script>
   <script src="js/rbac.js"></script>
   <script src="js/cadets_370_seed.js"></script>
@@ -602,28 +603,216 @@
       return (str || '').replace(/'/g, "\\'").replace(/"/g, '&quot;');
     }
 
-    // ── viewCadet(id) ─────────────────────────────────────────────────────
-    function viewCadet(id) {
+    // ── viewCadet(id) (Google Drive + Supabase Integration) ───────────────
+    let currentViewingCadetId = null;
+
+    async function viewCadet(id) {
       const c = cadetList.find(x => x.id === id);
       if (!c) return;
+      currentViewingCadetId = id;
 
-      document.getElementById("modal-cadet-name").textContent = `${c.first_name} ${c.last_name}`;
+      const photoSrc = window.DriveStorage ? window.DriveStorage.resolvePhotoUrl(c) : (c.drive_photo_url || c.profile_picture);
+      const initials = `${c.first_name?.[0] || ''}${c.last_name?.[0] || ''}`.toUpperCase() || 'CD';
+
+      document.getElementById("modal-cadet-name").innerHTML = `
+        <i class="fa-solid fa-user-shield" style="color:var(--brass); margin-right:0.4rem;"></i>
+        Cadet Profile &bull; ${c.first_name} ${c.last_name}
+      `;
+
       document.getElementById("modal-detail-body").innerHTML = `
-        <div style="font-size: 0.9rem; line-height: 1.6;">
-          <p><strong>Student ID:</strong> ${c.student_id || '---'}</p>
-          <p><strong>Course &amp; Year:</strong> ${c.course || '---'} (${c.year_level || '1st Yr'})</p>
-          <p><strong>Class Section:</strong> ${c.section || 'N/A'}</p>
-          <p><strong>Company &amp; Platoon:</strong> ${c.company || 'Unassigned'} • ${c.platoon || 'Unassigned'}</p>
-          <p><strong>Date of Birth:</strong> ${c.date_of_birth || '---'}</p>
-          <p><strong>Home Address:</strong> ${c.address || '---'}</p>
-          <p><strong>Contact Phone:</strong> ${c.phone || '---'}</p>
-          <p><strong>Email:</strong> ${c.email || '---'}</p>
-          <hr style="margin: 0.75rem 0; border: none; border-top: 1px solid var(--mist);">
-          <p><strong>Emergency Contact:</strong> ${c.emergency_contact_name || '---'} (${c.emergency_contact_phone || '---'})</p>
-          <p><strong>Account Status:</strong> <span class="badge badge-${c.status || 'pending'}">${(c.status || 'pending').toUpperCase()}</span></p>
+        <!-- Top Banner: Photo & Primary Info -->
+        <div style="display:flex; gap:1.25rem; align-items:center; background:rgba(184,142,44,0.06); border:1px solid rgba(184,142,44,0.2); border-radius:10px; padding:1rem; margin-bottom:1.25rem;">
+          <div style="width:75px; height:85px; border-radius:8px; overflow:hidden; border:2px solid var(--brass, #b88e2c); background:#11261a; display:flex; align-items:center; justify-content:center; flex-shrink:0;">
+            ${photoSrc ? `<img src="${photoSrc}" alt="${c.first_name}" style="width:100%; height:100%; object-fit:cover;" onerror="this.parentElement.innerHTML='<span style=\\'color:#dfb54e;font-size:1.4rem;font-weight:700;\\'>${initials}</span>'">` : `<span style="color:#dfb54e;font-size:1.4rem;font-weight:700;">${initials}</span>`}
+          </div>
+          <div style="flex:1;">
+            <div style="display:flex; align-items:center; gap:0.5rem; flex-wrap:wrap;">
+              <h3 style="margin:0; font-size:1.15rem; color:var(--ink);">${c.first_name} ${c.middle_name ? c.middle_name + ' ' : ''}${c.last_name}</h3>
+              <span class="badge badge-${c.status || 'pending'}">${(c.status || 'pending').toUpperCase()}</span>
+              ${c.drive_photo_id ? `<span class="badge" style="background:rgba(34,197,94,0.15); color:#22c55e;"><i class="fa-brands fa-google-drive"></i> Drive Photo</span>` : ''}
+            </div>
+            <div style="font-size:0.82rem; color:var(--slate); margin-top:0.25rem;">
+              <strong>Student ID:</strong> ${c.student_id || '---'} &bull; <strong>Rank:</strong> ${c.rank || 'Cadet'}
+            </div>
+            <div style="font-size:0.82rem; color:var(--slate); margin-top:0.15rem;">
+              <i class="fa-solid fa-shield-halved" style="color:var(--brass); font-size:0.75rem;"></i>
+              ${c.company || 'Unassigned'} Company &bull; ${c.platoon || 'Unassigned'} Platoon
+            </div>
+          </div>
+        </div>
+
+        <!-- Academic & Personal Details Grid -->
+        <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap:0.75rem; font-size:0.85rem; line-height:1.6; background:rgba(0,0,0,0.02); border:1px solid var(--border); border-radius:8px; padding:0.85rem 1rem; margin-bottom:1.25rem;">
+          <div><strong>Course &amp; Year:</strong> ${c.course || '---'} (${c.year_level || '1st Yr'})</div>
+          <div><strong>Class Section:</strong> ${c.section || 'N/A'}</div>
+          <div><strong>Date of Birth:</strong> ${c.date_of_birth || '---'}</div>
+          <div><strong>Contact Phone:</strong> ${c.phone || '---'}</div>
+          <div><strong>Email:</strong> ${c.email || '---'}</div>
+          <div><strong>Home Address:</strong> ${c.address || '---'}</div>
+          <div style="grid-column: 1 / -1;"><strong>Emergency Contact:</strong> ${c.emergency_contact_name || '---'} (${c.emergency_contact_phone || '---'})</div>
+        </div>
+
+        <!-- Google Drive Cadet Documents Section -->
+        <div style="border-top:1px solid var(--border); padding-top:1rem;">
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.75rem;">
+            <div style="font-size:0.95rem; font-weight:700; color:var(--ink);">
+              <i class="fa-brands fa-google-drive" style="color:#22c55e; margin-right:0.35rem;"></i>
+              Google Drive Cadet Documents &amp; Certificates
+            </div>
+            <button type="button" onclick="toggleAdminAttachDocForm()" class="btn btn-sm btn-outline" style="font-size:0.75rem; padding:0.25rem 0.6rem;">
+              <i class="fa-solid fa-plus"></i> Attach Document
+            </button>
+          </div>
+
+          <!-- Quick Attach Form (collapsible) -->
+          <div id="admin-attach-doc-form" style="display:none; background:rgba(223,181,78,0.05); border:1px solid rgba(223,181,78,0.3); border-radius:8px; padding:0.85rem; margin-bottom:1rem;">
+            <div style="font-size:0.8rem; font-weight:700; margin-bottom:0.5rem; color:var(--ink);">
+              Attach Official Document / Certificate to Cadet Google Drive Folder:
+            </div>
+            <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap:0.5rem; margin-bottom:0.5rem;">
+              <select id="modal-doc-type" class="form-input" style="font-size:0.8rem; padding:0.4rem;">
+                <option value="certificate">ROTC Certificate</option>
+                <option value="clearance">Medical Clearance</option>
+                <option value="birth_certificate">Birth Certificate</option>
+                <option value="enlistment_form">Enlistment Form</option>
+                <option value="attachment">Other Attachment</option>
+              </select>
+              <input type="text" id="modal-doc-desc" placeholder="Remarks / Description" class="form-input" style="font-size:0.8rem; padding:0.4rem;">
+            </div>
+            <div style="display:flex; gap:0.5rem; align-items:center;">
+              <input type="file" id="modal-doc-file" class="form-input" style="font-size:0.8rem; flex:1;" accept=".pdf,.doc,.docx,.xls,.xlsx,.png,.jpg,.jpeg">
+              <button type="button" id="btn-modal-upload-doc" onclick="uploadCadetDocFromAdmin('${c.id}')" class="btn btn-primary btn-sm" style="font-size:0.75rem;">
+                <i class="fa-solid fa-upload"></i> Upload
+              </button>
+            </div>
+            <div id="modal-doc-progress" style="display:none; margin-top:0.5rem; font-size:0.75rem; color:#22c55e;">
+              <i class="fa-solid fa-spinner fa-spin"></i> Uploading to Google Drive...
+            </div>
+          </div>
+
+          <!-- Documents List Container -->
+          <div id="modal-cadet-docs-list">
+            <div style="padding:1rem; text-align:center; color:var(--slate); font-size:0.85rem;">
+              <i class="fa-solid fa-spinner fa-spin"></i> Loading documents from Google Drive...
+            </div>
+          </div>
         </div>
       `;
+
       document.getElementById("modal-detail").classList.add("active");
+      await loadCadetDocsInModal(c.id);
+    }
+
+    function toggleAdminAttachDocForm() {
+      const f = document.getElementById("admin-attach-doc-form");
+      if (f) f.style.display = f.style.display === "none" ? "block" : "none";
+    }
+
+    async function loadCadetDocsInModal(profileId) {
+      const listEl = document.getElementById("modal-cadet-docs-list");
+      if (!listEl) return;
+
+      try {
+        const files = window.DriveStorage 
+          ? await window.DriveStorage.getCadetFiles(profileId)
+          : [];
+
+        if (!files || files.length === 0) {
+          listEl.innerHTML = `
+            <div style="padding:1.25rem; text-align:center; color:var(--slate); font-size:0.85rem; background:rgba(0,0,0,0.02); border-radius:6px;">
+              <i class="fa-regular fa-folder-open" style="color:var(--brass); margin-right:0.3rem;"></i>
+              No documents uploaded to Google Drive for this cadet yet.
+            </div>
+          `;
+          return;
+        }
+
+        let html = `<div style="display:flex; flex-direction:column; gap:0.5rem;">`;
+        files.forEach(f => {
+          const formattedSize = window.DriveStorage ? window.DriveStorage.formatBytes(f.file_size) : `${Math.round(f.file_size/1024)} KB`;
+          const uploadDate = f.created_at ? new Date(f.created_at).toLocaleDateString('en-PH', { month:'short', day:'numeric', year:'numeric' }) : '';
+          const previewUrl = window.DriveStorage ? window.DriveStorage.getPreviewUrl(f.drive_file_id) : f.drive_file_url;
+          const downloadUrl = window.DriveStorage ? window.DriveStorage.getDownloadUrl(f.drive_file_id) : f.drive_file_url;
+
+          html += `
+            <div style="display:flex; justify-content:space-between; align-items:center; padding:0.6rem 0.85rem; background:rgba(0,0,0,0.02); border:1px solid var(--border); border-radius:6px; font-size:0.82rem;">
+              <div style="display:flex; align-items:center; gap:0.6rem;">
+                <i class="fa-solid fa-file-pdf" style="color:#ef4444; font-size:1.1rem;"></i>
+                <div>
+                  <div style="font-weight:600; color:var(--ink);">${f.file_name}</div>
+                  <div style="font-size:0.75rem; color:var(--slate);">
+                    <span class="badge" style="background:rgba(184,142,44,0.12); color:var(--brass); font-size:0.7rem; padding:0.1rem 0.4rem;">${f.file_type}</span>
+                    &bull; ${formattedSize} &bull; ${uploadDate}
+                  </div>
+                </div>
+              </div>
+              <div style="display:flex; gap:0.35rem;">
+                <a href="${previewUrl}" target="_blank" rel="noopener noreferrer" class="btn btn-sm btn-outline" style="padding:0.2rem 0.5rem; font-size:0.75rem;" title="View in Google Drive">
+                  <i class="fa-solid fa-eye"></i> View
+                </a>
+                <a href="${downloadUrl}" target="_blank" rel="noopener noreferrer" class="btn btn-sm" style="padding:0.2rem 0.5rem; font-size:0.75rem; background:rgba(34,197,94,0.1); color:#16a34a;" title="Download">
+                  <i class="fa-solid fa-download"></i>
+                </a>
+                <button type="button" onclick="deleteCadetDocFromAdmin('${f.id}', '${f.drive_file_id}', '${profileId}')" class="btn btn-sm btn-danger" style="padding:0.2rem 0.5rem; font-size:0.75rem;" title="Delete Document">
+                  <i class="fa-solid fa-trash"></i>
+                </button>
+              </div>
+            </div>
+          `;
+        });
+        html += `</div>`;
+        listEl.innerHTML = html;
+      } catch (err) {
+        listEl.innerHTML = `<div style="color:#dc2626; font-size:0.82rem; padding:0.5rem;">Error loading files: ${err.message}</div>`;
+      }
+    }
+
+    async function uploadCadetDocFromAdmin(profileId) {
+      const fileInput = document.getElementById("modal-doc-file");
+      const file = fileInput?.files?.[0];
+      if (!file) {
+        alert("Please select a file to upload.");
+        return;
+      }
+
+      const fileType = document.getElementById("modal-doc-type").value;
+      const description = document.getElementById("modal-doc-desc").value.trim();
+      const btn = document.getElementById("btn-modal-upload-doc");
+      const progress = document.getElementById("modal-doc-progress");
+
+      btn.disabled = true;
+      if (progress) progress.style.display = "block";
+
+      try {
+        await window.DriveStorage.uploadCadetDocument({
+          profileId,
+          file,
+          fileType,
+          description,
+          uploadedBy: window.currentProfile?.id || null,
+        });
+
+        fileInput.value = "";
+        document.getElementById("modal-doc-desc").value = "";
+        toggleAdminAttachDocForm();
+        await loadCadetDocsInModal(profileId);
+      } catch (err) {
+        alert("Upload error: " + err.message);
+      } finally {
+        btn.disabled = false;
+        if (progress) progress.style.display = "none";
+      }
+    }
+
+    async function deleteCadetDocFromAdmin(cadetFileId, driveFileId, profileId) {
+      if (!confirm("Are you sure you want to permanently delete this file from Google Drive and Supabase?")) return;
+
+      try {
+        await window.DriveStorage.deleteCadetFile(cadetFileId, driveFileId);
+        await loadCadetDocsInModal(profileId);
+      } catch (err) {
+        alert("Failed to delete document: " + err.message);
+      }
     }
 
     function closeDetailModal() {

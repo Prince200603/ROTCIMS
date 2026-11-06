@@ -13,7 +13,6 @@
     { "source": "/gallery", "destination": "/gallery.html" },
     { "source": "/login", "destination": "/login.html" },
     { "source": "/register", "destination": "/register.html" },
-    { "source": "/reset-password", "destination": "/reset-password.html" },
     { "source": "/cadet-modules", "destination": "/cadet-modules.html" },
     { "source": "/cadet-dashboard", "destination": "/cadet-dashboard.html" },
     { "source": "/cadet-profile", "destination": "/cadet-profile.html" },
@@ -37,6 +36,23 @@
         {
           "key": "Content-Disposition",
           "value": "attachment"
+        }
+      ]
+    },
+    {
+      "source": "/api/(.*)",
+      "headers": [
+        {
+          "key": "Access-Control-Allow-Origin",
+          "value": "*"
+        },
+        {
+          "key": "Access-Control-Allow-Methods",
+          "value": "GET, POST, DELETE, OPTIONS"
+        },
+        {
+          "key": "Access-Control-Allow-Headers",
+          "value": "Authorization, Content-Type, X-Requested-With"
         }
       ]
     }

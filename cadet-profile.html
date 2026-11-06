@@ -32,6 +32,7 @@
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
   <script src="js/config.js"></script>
+  <script src="js/drive-storage.js"></script>
   <script src="js/auth.js"></script>
 
   <style>
@@ -589,6 +590,12 @@
                 </a>
               </li>
               <li>
+                <a href="#" id="tab-link-documents" onclick="switchTab('documents',this); return false;">
+                  <i class="fa-solid fa-file-shield"></i>
+                  Documents &amp; Certificates
+                </a>
+              </li>
+              <li>
                 <a href="#" id="tab-link-security" onclick="switchTab('security',this); return false;">
                   <i class="fa-solid fa-lock"></i>
                   Account &amp; Security
@@ -634,6 +641,16 @@
                         </button>
                       </div>
                       <input type="file" id="photo-file-input" accept="image/*" style="display:none;" onchange="handlePhotoSelect(event)">
+                    </div>
+                  </div>
+                  <!-- Google Drive Photo Upload Progress Indicator -->
+                  <div id="photo-upload-progress" style="display:none; margin-top:1rem; padding:0.75rem; background:rgba(223,181,78,0.08); border:1px solid rgba(223,181,78,0.25); border-radius:8px;">
+                    <div style="display:flex; justify-content:space-between; align-items:center; font-size:0.78rem; font-weight:600; color:var(--gold, #dfb54e); margin-bottom:0.35rem;">
+                      <span><i class="fa-brands fa-google-drive"></i> <span id="photo-upload-status-text">Uploading to Google Drive...</span></span>
+                      <span id="photo-upload-percent">0%</span>
+                    </div>
+                    <div style="width:100%; height:6px; background:rgba(255,255,255,0.12); border-radius:3px; overflow:hidden;">
+                      <div id="photo-upload-bar" style="width:0%; height:100%; background:linear-gradient(90deg, #dfb54e, #22c55e); transition:width 0.2s ease;"></div>
                     </div>
                   </div>
                 </div>
@@ -1143,6 +1160,103 @@
 
             </div><!-- /panel-security -->
 
+            <!-- ==========================================
+                 TAB 5: DOCUMENTS & CERTIFICATES (GOOGLE DRIVE)
+                 ========================================== -->
+            <div class="settings-panel" id="panel-documents">
+              
+              <!-- Upload Document Card -->
+              <div class="settings-section">
+                <div class="settings-section-header">
+                  <div class="sh-icon"><i class="fa-brands fa-google-drive"></i></div>
+                  <div>
+                    <h3>Upload Documents &amp; Certificates</h3>
+                    <p>Files are stored directly in your Google Drive cadet repository and registered in Supabase.</p>
+                  </div>
+                </div>
+
+                <div class="settings-section-body">
+                  <form id="cadet-doc-form" onsubmit="handleCadetDocUpload(event)">
+                    <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap:1rem; margin-bottom:1rem;">
+                      
+                      <!-- Document Type -->
+                      <div class="form-group">
+                        <label for="cadet-doc-type"><i class="fa-solid fa-folder-tree"></i> Document Classification *</label>
+                        <select id="cadet-doc-type" required class="form-input" style="width:100%; padding:0.6rem; border-radius:6px; border:1px solid var(--border); background:var(--input-bg, #fff);">
+                          <option value="certificate">ROTC Certificate / Completion</option>
+                          <option value="clearance">Medical Clearance / Fit to Drill</option>
+                          <option value="birth_certificate">Birth Certificate (PSA / NSO)</option>
+                          <option value="enlistment_form">Cadet Enlistment Record</option>
+                          <option value="attachment">Certificate of Good Moral</option>
+                          <option value="other">Other Official Attachment</option>
+                        </select>
+                      </div>
+
+                      <!-- Document Description -->
+                      <div class="form-group">
+                        <label for="cadet-doc-desc"><i class="fa-solid fa-comment-dots"></i> Description / Remarks</label>
+                        <input type="text" id="cadet-doc-desc" placeholder="e.g. MS-1 Final Completion Certificate" class="form-input" style="width:100%; padding:0.6rem; border-radius:6px; border:1px solid var(--border); background:var(--input-bg, #fff);">
+                      </div>
+                    </div>
+
+                    <!-- File Picker Area -->
+                    <div class="form-group" style="margin-bottom:1rem;">
+                      <label><i class="fa-solid fa-file-arrow-up"></i> Select Document File (PDF, Word, Excel, Image up to 25 MB) *</label>
+                      <div style="border:2px dashed var(--gold, #dfb54e); border-radius:8px; padding:1.25rem; text-align:center; background:rgba(223,181,78,0.04); cursor:pointer;" onclick="document.getElementById('cadet-doc-file-input').click()">
+                        <i class="fa-solid fa-cloud-arrow-up" style="font-size:2rem; color:var(--gold, #dfb54e); margin-bottom:0.5rem;"></i>
+                        <div id="cadet-doc-filename-display" style="font-size:0.9rem; font-weight:600; color:var(--ink);">Click to browse files or drag and drop</div>
+                        <div style="font-size:0.75rem; color:var(--slate); margin-top:0.25rem;">Supported: PDF, DOCX, XLSX, JPG, PNG (Max: 25 MB)</div>
+                      </div>
+                      <input type="file" id="cadet-doc-file-input" required style="display:none;" onchange="onCadetDocFileSelected(event)" accept=".pdf,.doc,.docx,.xls,.xlsx,.png,.jpg,.jpeg,.webp">
+                    </div>
+
+                    <!-- Progress Bar for Document Upload -->
+                    <div id="cadet-doc-progress-wrap" style="display:none; margin-bottom:1rem; padding:0.75rem; background:rgba(34,197,94,0.08); border:1px solid rgba(34,197,94,0.3); border-radius:8px;">
+                      <div style="display:flex; justify-content:space-between; font-size:0.78rem; font-weight:600; color:#16a34a; margin-bottom:0.35rem;">
+                        <span><i class="fa-brands fa-google-drive"></i> Uploading to Google Drive...</span>
+                        <span id="cadet-doc-progress-pct">0%</span>
+                      </div>
+                      <div style="width:100%; height:6px; background:rgba(255,255,255,0.15); border-radius:3px; overflow:hidden;">
+                        <div id="cadet-doc-progress-bar" style="width:0%; height:100%; background:linear-gradient(90deg, #16a34a, #22c55e); transition:width 0.2s ease;"></div>
+                      </div>
+                    </div>
+
+                    <div style="display:flex; justify-content:flex-end;">
+                      <button type="submit" id="btn-upload-cadet-doc" class="btn btn-primary btn-sm">
+                        <i class="fa-solid fa-cloud-arrow-up"></i> Upload Document to Google Drive
+                      </button>
+                    </div>
+                  </form>
+                </div>
+              </div>
+
+              <!-- Cadet Documents Ledger List -->
+              <div class="settings-section">
+                <div class="settings-section-header">
+                  <div class="sh-icon"><i class="fa-solid fa-folder-open"></i></div>
+                  <div style="flex:1;">
+                    <h3>My Google Drive Cadet Files</h3>
+                    <p>Live inventory of your uploaded certificates, clearances, and records.</p>
+                  </div>
+                  <div>
+                    <button type="button" onclick="loadCadetDocuments()" class="btn btn-sm" style="background:var(--paper); border:1px solid var(--border); color:var(--slate);">
+                      <i class="fa-solid fa-arrows-rotate"></i> Refresh
+                    </button>
+                  </div>
+                </div>
+
+                <div class="settings-section-body" style="padding:0;">
+                  <div id="cadet-docs-container">
+                    <div style="padding:2rem; text-align:center; color:var(--slate);">
+                      <i class="fa-solid fa-spinner fa-spin" style="font-size:1.5rem; color:var(--gold, #dfb54e); margin-bottom:0.5rem;"></i>
+                      <div>Loading documents from Google Drive &amp; Supabase...</div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+            </div><!-- /panel-documents -->
+
           </div><!-- /settings-panels -->
         </div><!-- /settings-wrapper -->
 
@@ -1156,7 +1270,9 @@
     // STATE
     // ================================================================
     let currentCadet = null;
-    let pendingPhotoBase64 = null; // holds new photo until "Save Photo" is clicked
+    let pendingPhotoFile = null;     // native File object for Google Drive upload
+    let pendingPhotoBase64 = null;   // holds preview data URI
+    let selectedCadetDocFile = null; // holds file selected for cadet document upload
 
     // ================================================================
     // INIT
@@ -1188,11 +1304,15 @@
 
       // Profile photo / initials
       document.getElementById("photo-initials").textContent = initials;
-      if (p.profile_picture && p.profile_picture.length > 50) {
+      const photoSrc = window.DriveStorage ? window.DriveStorage.resolvePhotoUrl(p) : (p.drive_photo_url || p.profile_picture);
+      if (photoSrc && photoSrc.length > 20) {
         const img = document.getElementById("photo-preview");
-        img.src = p.profile_picture;
+        img.src = photoSrc;
         img.style.display = "block";
         document.getElementById("photo-initials").style.display = "none";
+      } else {
+        document.getElementById("photo-preview").style.display = "none";
+        document.getElementById("photo-initials").style.display = "block";
       }
 
       // TAB 1 — Personal & Student Details
@@ -1216,11 +1336,15 @@
       const unitText = [p.company, p.platoon].filter(Boolean).join(' - ') || 'San Enrique ROTC Unit';
       document.getElementById("did-card-unit").innerHTML = `<i class="fa-solid fa-shield-halved" style="color: #dfb54e; font-size: 0.72rem;"></i> Unit: ${unitText}`;
       document.getElementById("did-card-initials").textContent = initials;
-      if (p.profile_picture && p.profile_picture.length > 50) {
+      if (photoSrc && photoSrc.length > 20) {
         const didPhoto = document.getElementById("did-card-photo");
-        didPhoto.src = p.profile_picture;
+        didPhoto.src = photoSrc;
         didPhoto.style.display = "block";
         document.getElementById("did-card-initials").style.display = "none";
+      } else {
+        const didPhoto = document.getElementById("did-card-photo");
+        if (didPhoto) didPhoto.style.display = "none";
+        document.getElementById("did-card-initials").style.display = "block";
       }
 
       // Render Attendance QR Code
@@ -1251,6 +1375,9 @@
       document.getElementById("acc-updated").textContent = p.updated_at
         ? new Date(p.updated_at).toLocaleDateString("en-PH", { year:"numeric", month:"long", day:"numeric", hour:"2-digit", minute:"2-digit" })
         : "Not updated yet";
+
+      // TAB 5 — Load Google Drive Documents & Certificates
+      loadCadetDocuments();
     }
 
     // ================================================================
@@ -1280,15 +1407,17 @@
     }
 
     // ================================================================
-    // PHOTO HANDLING
+    // PHOTO HANDLING (GOOGLE DRIVE + SUPABASE SYNC)
     // ================================================================
     function handlePhotoSelect(event) {
       const file = event.target.files[0];
       if (!file) return;
-      if (file.size > 5 * 1024 * 1024) {
-        showToast("File too large. Please choose a photo under 5 MB.", "error");
+      if (file.size > 10 * 1024 * 1024) {
+        showToast("File too large. Please choose a photo under 10 MB.", "error");
         return;
       }
+      pendingPhotoFile = file;
+
       const reader = new FileReader();
       reader.onload = (e) => {
         const img = new Image();
@@ -1301,12 +1430,12 @@
           canvas.width = w;
           canvas.height = h;
           canvas.getContext("2d").drawImage(img, 0, 0, w, h);
-          pendingPhotoBase64 = canvas.toDataURL("image/jpeg", 0.82);
+          pendingPhotoBase64 = canvas.toDataURL("image/jpeg", 0.85);
           const preview = document.getElementById("photo-preview");
           preview.src = pendingPhotoBase64;
           preview.style.display = "block";
           document.getElementById("photo-initials").style.display = "none";
-          showToast("Photo selected! Click 'Save Photo' to apply.", "info");
+          showToast("Photo selected! Click 'Save Photo' to upload to Google Drive.", "info");
         };
         img.src = e.target.result;
       };
@@ -1314,36 +1443,312 @@
       event.target.value = "";
     }
 
-    function removePhoto() {
-      pendingPhotoBase64 = null;
-      const preview = document.getElementById("photo-preview");
-      preview.src = "";
-      preview.style.display = "none";
-      document.getElementById("photo-initials").style.display = "block";
+    async function removePhoto() {
+      if (!confirm("Are you sure you want to remove your profile photo?")) return;
+      const btn = document.getElementById("btn-remove-photo");
+      if (btn) btn.disabled = true;
+
+      try {
+        if (window.DriveStorage) {
+          await window.DriveStorage.removeCadetPhoto(currentCadet.id, currentCadet.drive_photo_id);
+        } else if (window.supabaseClient) {
+          await window.supabaseClient.from("profiles").update({
+            profile_picture: null,
+            drive_photo_id: null,
+            drive_photo_url: null,
+            updated_at: new Date().toISOString()
+          }).eq("id", currentCadet.id);
+        }
+
+        currentCadet.drive_photo_id = null;
+        currentCadet.drive_photo_url = null;
+        currentCadet.profile_picture = null;
+        pendingPhotoFile = null;
+        pendingPhotoBase64 = null;
+
+        const preview = document.getElementById("photo-preview");
+        if (preview) { preview.src = ""; preview.style.display = "none"; }
+        const didPhoto = document.getElementById("did-card-photo");
+        if (didPhoto) { didPhoto.src = ""; didPhoto.style.display = "none"; }
+        document.getElementById("photo-initials").style.display = "block";
+        document.getElementById("did-card-initials").style.display = "block";
+
+        showToast("Profile photo removed successfully.", "info");
+      } catch (err) {
+        showToast("Error removing photo: " + err.message, "error");
+      } finally {
+        if (btn) btn.disabled = false;
+      }
     }
 
     async function savePhoto() {
-      if (!pendingPhotoBase64) {
+      if (!pendingPhotoFile && !pendingPhotoBase64) {
         showToast("No new photo selected yet.", "info");
         return;
       }
+
       const btn = document.getElementById("btn-save-photo");
+      const progressWrap = document.getElementById("photo-upload-progress");
+      const progressBar = document.getElementById("photo-upload-bar");
+      const progressPct = document.getElementById("photo-upload-percent");
+      const progressText = document.getElementById("photo-upload-status-text");
+
       btn.disabled = true;
-      btn.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> Saving...`;
+      btn.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> Uploading to Drive...`;
+      if (progressWrap) progressWrap.style.display = "block";
+      if (progressBar) progressBar.style.width = "5%";
+      if (progressPct) progressPct.textContent = "5%";
+
       try {
-        const { error } = await window.supabaseClient
-          .from("profiles")
-          .update({ profile_picture: pendingPhotoBase64, updated_at: new Date().toISOString() })
-          .eq("id", currentCadet.id);
-        if (error) throw error;
-        currentCadet.profile_picture = pendingPhotoBase64;
+        let savedPhotoUrl = null;
+
+        // Step 1: Upload to Google Drive via DriveStorage
+        if (window.DriveStorage && pendingPhotoFile) {
+          if (progressText) progressText.textContent = "Uploading to Google Drive CadetPhotos folder...";
+          const driveRes = await window.DriveStorage.uploadCadetPhoto(
+            pendingPhotoFile,
+            currentCadet.id,
+            currentCadet.drive_photo_id,
+            (pct) => {
+              if (progressBar) progressBar.style.width = `${pct}%`;
+              if (progressPct) progressPct.textContent = `${pct}%`;
+            }
+          );
+
+          currentCadet.drive_photo_id = driveRes.fileId;
+          currentCadet.drive_photo_url = driveRes.directUrl;
+          currentCadet.profile_picture = driveRes.directUrl;
+          savedPhotoUrl = driveRes.directUrl;
+        } else {
+          // Fallback to Supabase base64 if Drive service is offline
+          const { error } = await window.supabaseClient
+            .from("profiles")
+            .update({ profile_picture: pendingPhotoBase64, updated_at: new Date().toISOString() })
+            .eq("id", currentCadet.id);
+          if (error) throw error;
+          currentCadet.profile_picture = pendingPhotoBase64;
+          savedPhotoUrl = pendingPhotoBase64;
+        }
+
+        // Step 2: Refresh local previews & Digital ID
+        const preview = document.getElementById("photo-preview");
+        if (preview && savedPhotoUrl) {
+          preview.src = savedPhotoUrl;
+          preview.style.display = "block";
+          document.getElementById("photo-initials").style.display = "none";
+        }
+        const didPhoto = document.getElementById("did-card-photo");
+        if (didPhoto && savedPhotoUrl) {
+          didPhoto.src = savedPhotoUrl;
+          didPhoto.style.display = "block";
+          document.getElementById("did-card-initials").style.display = "none";
+        }
+
+        pendingPhotoFile = null;
         pendingPhotoBase64 = null;
-        showToast("Profile photo saved successfully! ✓", "success");
+        showToast("Profile photo uploaded to Google Drive & saved to Supabase! ✓", "success");
       } catch (err) {
+        console.error("Photo save error:", err);
         showToast("Error saving photo: " + err.message, "error");
       } finally {
         btn.disabled = false;
         btn.innerHTML = `<i class="fa-solid fa-floppy-disk"></i> Save Photo`;
+        setTimeout(() => {
+          if (progressWrap) progressWrap.style.display = "none";
+        }, 1200);
+      }
+    }
+
+    // ================================================================
+    // CADET DOCUMENTS & CERTIFICATES (GOOGLE DRIVE + SUPABASE)
+    // ================================================================
+    function onCadetDocFileSelected(event) {
+      const file = event.target.files[0];
+      if (!file) return;
+      if (file.size > 25 * 1024 * 1024) {
+        showToast("File exceeds 25 MB limit. Please select a smaller file.", "error");
+        event.target.value = "";
+        return;
+      }
+      selectedCadetDocFile = file;
+      const display = document.getElementById("cadet-doc-filename-display");
+      if (display) {
+        display.innerHTML = `<strong><i class="fa-solid fa-file-check" style="color:#22c55e;"></i> ${file.name}</strong> (${window.DriveStorage ? window.DriveStorage.formatBytes(file.size) : Math.round(file.size/1024) + ' KB'})`;
+      }
+    }
+
+    async function handleCadetDocUpload(event) {
+      event.preventDefault();
+      if (!selectedCadetDocFile) {
+        showToast("Please choose a document file to upload.", "info");
+        return;
+      }
+      if (!currentCadet || !currentCadet.id) {
+        showToast("Cadet profile not loaded. Please refresh the page.", "error");
+        return;
+      }
+
+      const fileType = document.getElementById("cadet-doc-type").value;
+      const description = document.getElementById("cadet-doc-desc").value.trim();
+      const btn = document.getElementById("btn-upload-cadet-doc");
+      const progressWrap = document.getElementById("cadet-doc-progress-wrap");
+      const progressBar = document.getElementById("cadet-doc-progress-bar");
+      const progressPct = document.getElementById("cadet-doc-progress-pct");
+
+      btn.disabled = true;
+      btn.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> Uploading to Google Drive...`;
+      if (progressWrap) progressWrap.style.display = "block";
+
+      try {
+        await window.DriveStorage.uploadCadetDocument({
+          profileId: currentCadet.id,
+          file: selectedCadetDocFile,
+          fileType,
+          description,
+          uploadedBy: currentCadet.id,
+          onProgress: (pct) => {
+            if (progressBar) progressBar.style.width = `${pct}%`;
+            if (progressPct) progressPct.textContent = `${pct}%`;
+          }
+        });
+
+        showToast("Document successfully uploaded to Google Drive & registered in Supabase! ✓", "success");
+
+        // Reset form
+        document.getElementById("cadet-doc-form").reset();
+        selectedCadetDocFile = null;
+        const display = document.getElementById("cadet-doc-filename-display");
+        if (display) display.textContent = "Click to browse files or drag and drop";
+
+        // Reload documents list
+        await loadCadetDocuments();
+      } catch (err) {
+        console.error("Document upload error:", err);
+        showToast("Document upload failed: " + err.message, "error");
+      } finally {
+        btn.disabled = false;
+        btn.innerHTML = `<i class="fa-solid fa-cloud-arrow-up"></i> Upload Document to Google Drive`;
+        setTimeout(() => {
+          if (progressWrap) progressWrap.style.display = "none";
+        }, 1200);
+      }
+    }
+
+    async function loadCadetDocuments() {
+      const container = document.getElementById("cadet-docs-container");
+      if (!container || !currentCadet) return;
+
+      try {
+        const files = window.DriveStorage 
+          ? await window.DriveStorage.getCadetFiles(currentCadet.id)
+          : [];
+
+        if (!files || files.length === 0) {
+          container.innerHTML = `
+            <div style="padding:2.5rem 1.5rem; text-align:center; color:var(--slate);">
+              <i class="fa-regular fa-folder-open" style="font-size:2.5rem; color:var(--gold, #dfb54e); opacity:0.6; margin-bottom:0.75rem;"></i>
+              <h4 style="margin:0 0 0.4rem; color:var(--ink);">No Documents or Certificates Uploaded Yet</h4>
+              <p style="margin:0; font-size:0.85rem; max-width:420px; margin:0 auto;">
+                Upload your ROTC Completion Certificates, Medical Clearances, and official records above. They are safely organized in Google Drive and available to your Command Staff.
+              </p>
+            </div>
+          `;
+          return;
+        }
+
+        const typeLabels = {
+          certificate:       { label: 'ROTC Certificate', icon: 'fa-award', color: '#16a34a' },
+          clearance:         { label: 'Medical Clearance', icon: 'fa-heart-pulse', color: '#0284c7' },
+          birth_certificate: { label: 'Birth Certificate', icon: 'fa-id-badge', color: '#ea580c' },
+          enlistment_form:   { label: 'Enlistment Record', icon: 'fa-file-signature', color: '#8b5cf6' },
+          attachment:        { label: 'Good Moral / Cert', icon: 'fa-file-shield', color: '#d97706' },
+          other:             { label: 'Attachment', icon: 'fa-paperclip', color: '#64748b' },
+        };
+
+        let html = `
+          <div class="table-responsive">
+            <table class="data-table" style="width:100%; border-collapse:collapse; font-size:0.85rem;">
+              <thead>
+                <tr style="border-bottom:1px solid var(--border); text-align:left; background:rgba(0,0,0,0.02);">
+                  <th style="padding:0.75rem 1rem;">Document</th>
+                  <th style="padding:0.75rem 1rem;">Classification</th>
+                  <th style="padding:0.75rem 1rem;">Size</th>
+                  <th style="padding:0.75rem 1rem;">Uploaded Date</th>
+                  <th style="padding:0.75rem 1rem; text-align:right;">Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+        `;
+
+        files.forEach(f => {
+          const typeMeta = typeLabels[f.file_type] || typeLabels.other;
+          const formattedSize = window.DriveStorage ? window.DriveStorage.formatBytes(f.file_size) : `${Math.round(f.file_size/1024)} KB`;
+          const uploadDate = f.created_at ? new Date(f.created_at).toLocaleDateString('en-PH', { month: 'short', day: 'numeric', year: 'numeric' }) : '---';
+          const previewUrl = window.DriveStorage ? window.DriveStorage.getPreviewUrl(f.drive_file_id) : f.drive_file_url;
+          const downloadUrl = window.DriveStorage ? window.DriveStorage.getDownloadUrl(f.drive_file_id) : f.drive_file_url;
+
+          html += `
+            <tr style="border-bottom:1px solid var(--border);">
+              <td style="padding:0.75rem 1rem;">
+                <div style="display:flex; align-items:center; gap:0.6rem;">
+                  <i class="fa-solid ${typeMeta.icon}" style="color:${typeMeta.color}; font-size:1.1rem;"></i>
+                  <div>
+                    <div style="font-weight:600; color:var(--ink);">${f.file_name}</div>
+                    ${f.description ? `<div style="font-size:0.75rem; color:var(--slate);">${f.description}</div>` : ''}
+                  </div>
+                </div>
+              </td>
+              <td style="padding:0.75rem 1rem;">
+                <span class="badge" style="background:${typeMeta.color}15; color:${typeMeta.color}; font-weight:600; font-size:0.75rem; padding:0.2rem 0.55rem; border-radius:4px;">
+                  ${typeMeta.label}
+                </span>
+                <span class="badge" style="background:rgba(34,197,94,0.1); color:#16a34a; font-size:0.72rem; margin-left:0.25rem;">
+                  <i class="fa-brands fa-google-drive"></i> Drive
+                </span>
+              </td>
+              <td style="padding:0.75rem 1rem; color:var(--slate); font-family:monospace;">${formattedSize}</td>
+              <td style="padding:0.75rem 1rem; color:var(--slate);">${uploadDate}</td>
+              <td style="padding:0.75rem 1rem; text-align:right; white-space:nowrap;">
+                <a href="${previewUrl}" target="_blank" rel="noopener noreferrer" class="btn btn-sm" style="padding:0.25rem 0.55rem; font-size:0.75rem; background:rgba(30,58,41,0.08); color:var(--primary); margin-right:0.3rem;" title="Preview in Google Drive">
+                  <i class="fa-solid fa-eye"></i> View
+                </a>
+                <a href="${downloadUrl}" target="_blank" rel="noopener noreferrer" class="btn btn-sm" style="padding:0.25rem 0.55rem; font-size:0.75rem; background:rgba(223,181,78,0.15); color:var(--gold, #dfb54e); margin-right:0.3rem;" title="Download File">
+                  <i class="fa-solid fa-download"></i>
+                </a>
+                <button type="button" onclick="deleteCadetDocument('${f.id}', '${f.drive_file_id}')" class="btn btn-sm btn-danger" style="padding:0.25rem 0.55rem; font-size:0.75rem;" title="Delete File">
+                  <i class="fa-solid fa-trash"></i>
+                </button>
+              </td>
+            </tr>
+          `;
+        });
+
+        html += `
+              </tbody>
+            </table>
+          </div>
+        `;
+        container.innerHTML = html;
+      } catch (err) {
+        console.warn("loadCadetDocuments error:", err);
+        container.innerHTML = `<div style="padding:1.5rem; text-align:center; color:#dc2626;">Error loading documents: ${err.message}</div>`;
+      }
+    }
+
+    async function deleteCadetDocument(cadetFileId, driveFileId) {
+      if (!confirm("Are you sure you want to permanently delete this document from Google Drive and ROTCIMS?")) return;
+
+      try {
+        if (window.DriveStorage) {
+          await window.DriveStorage.deleteCadetFile(cadetFileId, driveFileId);
+        } else if (window.supabaseClient) {
+          await window.supabaseClient.from("cadet_files").delete().eq("id", cadetFileId);
+        }
+
+        showToast("Document deleted from Google Drive and Supabase. ✓", "info");
+        await loadCadetDocuments();
+      } catch (err) {
+        showToast("Failed to delete document: " + err.message, "error");
       }
     }
 

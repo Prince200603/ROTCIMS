@@ -25,6 +25,7 @@
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="js/config.js"></script>
+  <script src="js/drive-storage.js"></script>
   <script src="js/auth.js"></script>
   <script src="js/rbac.js"></script>
 
@@ -698,6 +699,7 @@
   <script>
     let currentAdmin = null;
     let selectedPhotoBase64 = null;
+    let selectedPhotoFile = null; // Native file for Google Drive upload
 
     document.addEventListener("DOMContentLoaded", async () => {
       // ── SECURITY GUARD: Strictly Admin-Only ──────────────────────────────
@@ -803,6 +805,7 @@
     function handlePhotoSelect(event) {
       const file = event.target.files[0];
       if (!file) return;
+      selectedPhotoFile = file; // Store for Google Drive upload
 
       const statusText = document.getElementById("photo-status-text");
       if (statusText) statusText.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Optimizing photo...';
@@ -828,6 +831,7 @@
           ctx.drawImage(img, 0, 0, w, h);
 
           selectedPhotoBase64 = canvas.toDataURL("image/jpeg", 0.85);
+          selectedPhotoFile = file; // Store native File for Drive upload
           const preview = document.getElementById("avatar-preview-img");
           if (preview) preview.src = selectedPhotoBase64;
 
@@ -960,7 +964,19 @@
 
         if (offError) throw offError;
 
-        // 5. Upsert into public.personnel table
+        // 5. Upload officer photo to Google Drive (async, non-blocking)
+        if (profileId && selectedPhotoFile && window.DriveStorage) {
+          window.DriveStorage.uploadCadetPhoto(
+            selectedPhotoFile,
+            profileId,
+            null, // no existing Drive photo to replace
+            null  // no progress callback needed here
+          ).catch(err => {
+            console.warn('[Officer Create] Google Drive photo upload note:', err.message);
+          });
+        }
+
+        // 6. Upsert into public.personnel table
         await window.supabaseClient
           .from("personnel")
           .upsert({

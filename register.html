@@ -24,6 +24,7 @@
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="js/config.js"></script>
+  <script src="js/drive-storage.js"></script>
   <script src="js/auth.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
@@ -629,13 +630,15 @@
   </div>
 
   <script>
-    // Cached Base64 profile photo
+    // Cached profile photo
     let selectedPhotoBase64 = null;
+    let selectedPhotoFile = null;
 
     // ── CLIENT-SIDE PHOTO SELECTION & OPTIMIZATION ───────────────────────
     function handlePhotoSelect(event) {
       const file = event.target.files[0];
       if (!file) return;
+      selectedPhotoFile = file;
 
       const originalSizeMB = (file.size / (1024 * 1024)).toFixed(2);
       const statusText = document.getElementById("photo-status-text");
@@ -893,6 +896,26 @@
         }
 
         try {
+          // Attempt Google Drive photo upload if photo was selected
+          if (selectedPhotoFile && window.DriveStorage) {
+            try {
+              btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Uploading photo to Google Drive...';
+              const driveRes = await window.DriveStorage.uploadFile({
+                file: selectedPhotoFile,
+                folder: 'CADET_PHOTOS',
+                fileName: `cadet_photo_${Date.now()}.${selectedPhotoFile.name.split('.').pop() || 'jpg'}`
+              });
+              if (driveRes && driveRes.fileId) {
+                formData.drive_photo_id = driveRes.fileId;
+                formData.drive_photo_url = driveRes.directUrl || driveRes.thumbnailLink;
+                formData.profile_picture = driveRes.directUrl || formData.profile_picture;
+              }
+            } catch (driveErr) {
+              console.warn('[Registration] Google Drive photo upload notice, continuing with local photo:', driveErr.message);
+            }
+          }
+
+          btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Creating cadet account...';
           await Auth.register(formData);
 
           alertBox.className = "alert alert-success";

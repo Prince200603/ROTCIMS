@@ -22,6 +22,7 @@
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="js/config.js"></script>
+  <script src="js/drive-storage.js"></script>
   <script src="js/auth.js"></script>
   <script src="js/rbac.js"></script>
 
@@ -973,6 +974,11 @@
                 <span>Photos</span>
                 <span id="badge-photo-count" class="attach-count-badge" style="display: none;">0</span>
               </button>
+              <button type="button" class="attach-btn" onclick="triggerVideoUpload()" title="Add video">
+                <i class="fa-solid fa-video" style="color: #ec4899; font-size: 1rem;"></i>
+                <span>Video</span>
+                <span id="badge-video-count" class="attach-count-badge" style="display: none;">0</span>
+              </button>
               <button type="button" class="attach-btn" onclick="toggleEmojiDrawer()" title="Insert emojis">
                 <i class="fa-regular fa-face-smile" style="color: #f59e0b; font-size: 1rem;"></i>
                 <span>Emoji</span>
@@ -1011,6 +1017,8 @@
           <div class="media-upload-container">
             <!-- Hidden file input for multi-select -->
             <input type="file" id="multi-file-input" multiple accept="image/*" style="display: none;" onchange="handleMultipleFiles(event)">
+            <!-- Hidden file input for video attachment -->
+            <input type="file" id="video-file-input" accept="video/mp4, video/quicktime, video/webm" style="display: none;" onchange="handleVideoFile(event)">
 
             <!-- Dropzone -->
             <div class="upload-zone-modern" id="upload-dropzone" onclick="triggerPhotoUpload()">
@@ -1049,6 +1057,22 @@
               <span id="preview-grid-mode" style="color: #64748b;">Collage Ready</span>
             </div>
             <div id="live-collage-grid" class="collage-grid"></div>
+          </div>
+
+          <!-- Video Attachment Preview -->
+          <div id="video-preview-wrap" style="display: none; margin: 0 1.4rem 1.25rem; padding: 0.9rem; background: #0f172a; border-radius: 12px; border: 1px solid #1e293b;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem; color: #fff;">
+              <div style="display: flex; align-items: center; gap: 0.5rem; font-size: 0.85rem; font-weight: 600;">
+                <i class="fa-solid fa-file-video" style="color: #ec4899;"></i>
+                <span id="video-preview-filename" style="max-width: 250px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">video.mp4</span>
+                <span id="video-preview-size" style="font-size: 0.72rem; color: #94a3b8; font-family: monospace;">(0 MB)</span>
+                <span class="badge" style="background: rgba(34,197,94,0.15); color: #22c55e; font-size: 0.7rem;"><i class="fa-brands fa-google-drive"></i> POSTS/Videos</span>
+              </div>
+              <button type="button" onclick="removeSelectedVideo()" style="background: rgba(239,68,68,0.2); color: #ef4444; border: none; border-radius: 4px; padding: 0.2rem 0.5rem; font-size: 0.75rem; cursor: pointer;">
+                <i class="fa-solid fa-trash"></i> Remove Video
+              </button>
+            </div>
+            <video id="composer-video-player" controls style="width: 100%; max-height: 240px; border-radius: 8px; display: block; background: #000;"></video>
           </div>
 
           <!-- Bottom Action Buttons Strip -->
@@ -1164,6 +1188,7 @@
   let currentOfficer = null;
   let selectedImages = [];     // Array of Base64 preview strings or public URLs (for display/thumbnails)
   let selectedFiles  = [];     // Array of raw File objects (for Supabase Storage upload)
+  let selectedVideoFile = null; // Video file for Google Drive upload (POSTS/Videos)
   let allFeedPosts   = [];
   let currentLightboxImages = [];
   let currentLightboxIndex  = 0;
@@ -1247,6 +1272,63 @@
   function triggerPhotoUpload() {
     const input = document.getElementById('multi-file-input');
     if (input) input.click();
+  }
+
+  function triggerVideoUpload() {
+    const input = document.getElementById('video-file-input');
+    if (input) input.click();
+  }
+
+  function handleVideoFile(e) {
+    const file = e.target.files && e.target.files[0];
+    if (!file) return;
+
+    if (!file.type.startsWith('video/') && !/\.(mp4|mov|webm|avi|mkv)$/i.test(file.name)) {
+      alert('Please select a valid video file (.mp4, .mov, .webm).');
+      return;
+    }
+
+    if (file.size > 100 * 1024 * 1024) {
+      alert('Video file exceeds 100 MB limit.');
+      return;
+    }
+
+    selectedVideoFile = file;
+    const wrap = document.getElementById('video-preview-wrap');
+    const nameEl = document.getElementById('video-preview-filename');
+    const sizeEl = document.getElementById('video-preview-size');
+    const player = document.getElementById('composer-video-player');
+    const badge = document.getElementById('badge-video-count');
+
+    if (nameEl) nameEl.textContent = file.name;
+    if (sizeEl) sizeEl.textContent = `(${formatBytes(file.size)})`;
+    if (player) {
+      player.src = URL.createObjectURL(file);
+    }
+    if (badge) {
+      badge.textContent = '1';
+      badge.style.display = 'inline-block';
+    }
+    if (wrap) wrap.style.display = 'block';
+  }
+
+  function removeSelectedVideo() {
+    selectedVideoFile = null;
+    const wrap = document.getElementById('video-preview-wrap');
+    const player = document.getElementById('composer-video-player');
+    const badge = document.getElementById('badge-video-count');
+    const input = document.getElementById('video-file-input');
+
+    if (input) input.value = '';
+    if (player) {
+      player.pause();
+      player.src = '';
+    }
+    if (badge) {
+      badge.textContent = '0';
+      badge.style.display = 'none';
+    }
+    if (wrap) wrap.style.display = 'none';
   }
 
   function toggleEmojiDrawer() {
@@ -1542,38 +1624,75 @@
     const uniform_info = document.getElementById('post-event-uniform').value.trim() || null;
 
     try {
-      // ── STEP 1: Upload raw image files to Supabase Storage ─────────────────
-      // We try uploading to a 'gallery' storage bucket. If it works, we get
-      // real public URLs. If the bucket doesn't exist, we fall back to base64.
+      // ── STEP 1: Upload photos & video to Google Drive / Supabase Storage ────
       let finalImageUrls = [];
+      let driveFileIds = [];
 
-      if (selectedFiles.length > 0 && window.supabaseClient) {
-        btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Uploading photos…';
+      // 1A. Upload photos to Google Drive (Folder: POSTS/Images)
+      if (selectedFiles.length > 0 && window.DriveStorage) {
+        btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Uploading photos to Google Drive (POSTS/Images)…';
+        try {
+          const driveUploadPromises = selectedFiles.map(async (file, idx) => {
+            const upRes = await window.DriveStorage.uploadPostMedia({
+              file,
+              type: 'image',
+              onProgress: (pct) => {
+                btn.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> Uploading photo ${idx + 1}/${selectedFiles.length} (${pct}%)…`;
+              }
+            });
+            return upRes;
+          });
+          const driveResults = await Promise.all(driveUploadPromises);
+          driveResults.forEach(r => {
+            if (r?.fileId) driveFileIds.push(r.fileId);
+            if (r?.directUrl) finalImageUrls.push(r.directUrl);
+          });
+        } catch (driveErr) {
+          console.warn('[Posting] Google Drive photo upload notice:', driveErr.message);
+        }
+      }
+
+      // 1B. Supabase Storage fallback for images if Drive was offline
+      if (finalImageUrls.length === 0 && selectedFiles.length > 0 && window.supabaseClient) {
+        btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Uploading photos to storage…';
         const uploadPromises = selectedFiles.map(async (file, idx) => {
-          // Create a unique file name: timestamp + index + original name
           const ext = file.name.split('.').pop() || 'jpg';
           const fileName = `posts/${Date.now()}_${idx}_${Math.random().toString(36).slice(2,8)}.${ext}`;
           const { data: upData, error: upErr } = await window.supabaseClient
             .storage
-            .from('gallery')           // bucket name must exist in Supabase Storage
-            .upload(fileName, file, { upsert: false, contentType: file.type });
-          if (upErr) {
-            console.warn('Storage upload error:', upErr.message);
-            // Fall back: keep base64 preview for this image
-            return selectedImages[idx] || null;
-          }
-          // Get the public URL of the uploaded file
-          const { data: urlData } = window.supabaseClient
-            .storage
             .from('gallery')
-            .getPublicUrl(upData.path);
+            .upload(fileName, file, { upsert: false, contentType: file.type });
+          if (upErr) return selectedImages[idx] || null;
+          const { data: urlData } = window.supabaseClient.storage.from('gallery').getPublicUrl(upData.path);
           return urlData?.publicUrl || selectedImages[idx] || null;
         });
         const results = await Promise.all(uploadPromises);
         finalImageUrls = results.filter(Boolean);
-      } else {
-        // No raw files (e.g., user pasted a URL via Web Link button)
+      } else if (finalImageUrls.length === 0) {
         finalImageUrls = selectedImages.filter(Boolean);
+      }
+
+      // 1C. Upload video to Google Drive (Folder: POSTS/Videos)
+      let driveVideoId = null;
+      let finalVideoUrl = null;
+
+      if (selectedVideoFile && window.DriveStorage) {
+        btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Uploading video to Google Drive (POSTS/Videos)…';
+        try {
+          const videoRes = await window.DriveStorage.uploadPostMedia({
+            file: selectedVideoFile,
+            type: 'video',
+            onProgress: (pct) => {
+              btn.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> Uploading video (${pct}%)…`;
+            }
+          });
+          if (videoRes?.fileId) {
+            driveVideoId = videoRes.fileId;
+            finalVideoUrl = videoRes.streamUrl || videoRes.previewUrl || videoRes.webViewLink;
+          }
+        } catch (vidErr) {
+          console.warn('[Posting] Google Drive video upload note:', vidErr.message);
+        }
       }
 
       btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Saving post…';
@@ -1584,7 +1703,10 @@
         caption,
         category,
         album_name,
-        images: finalImageUrls,            // Store real public URLs (not base64)
+        images: finalImageUrls,
+        drive_file_ids: driveFileIds,
+        drive_video_id: driveVideoId,
+        video_url: finalVideoUrl,
         event_date,
         location,
         uniform_info,
@@ -1700,6 +1822,7 @@
       document.getElementById('posting-form').reset();
       selectedImages = [];
       selectedFiles  = [];
+      removeSelectedVideo();
       renderThumbnailsAndPreview();
       onCategoryChanged('gallery');
 
@@ -1903,6 +2026,13 @@
           <!-- Images Collage Grid -->
           ${imagesArr.length > 0 ? `
             <div id="collage-container-${post.id}"></div>
+          ` : ''}
+
+          <!-- Video Player if post has video -->
+          ${(post.video_url || post.drive_video_id) ? `
+            <div style="margin: 0.75rem 1.4rem; border-radius: 10px; overflow: hidden; background: #000; box-shadow: 0 4px 15px rgba(0,0,0,0.2);">
+              <video controls src="${post.drive_video_id && window.DriveStorage ? window.DriveStorage.getStreamUrl(post.drive_video_id) : (post.video_url || '')}" playsinline style="width: 100%; max-height: 400px; display: block;"></video>
+            </div>
           ` : ''}
 
           <!-- Post Footer -->

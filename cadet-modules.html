@@ -29,6 +29,7 @@
   <!-- Supabase Client & Authentication -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="js/config.js"></script>
+  <script src="js/drive-storage.js"></script>
   <script src="js/auth.js"></script>
 
   <style>
@@ -233,6 +234,7 @@
     .icon-excel { background: linear-gradient(135deg, #107c41, #0b532c); color: #ffffff; }
     .icon-pdf { background: linear-gradient(135deg, #d32f2f, #9a0007); color: #ffffff; }
     .icon-ppt { background: linear-gradient(135deg, #d24726, #9c3015); color: #ffffff; }
+    .icon-video { background: linear-gradient(135deg, #e11d48, #9f1239); color: #ffffff; }
     .icon-zip { background: linear-gradient(135deg, #7c3aed, #5b21b6); color: #ffffff; }
     .icon-generic { background: linear-gradient(135deg, #b88e2c, #856318); color: #ffffff; }
 
@@ -293,6 +295,7 @@
     .badge-excel { background: #dcfce7; color: #15803d; border: 1px solid #bbf7d0; }
     .badge-pdf { background: #fee2e2; color: #b91c1c; border: 1px solid #fecaca; }
     .badge-ppt { background: #ffedd5; color: #c2410c; border: 1px solid #fed7aa; }
+    .badge-video { background: #ffe4e6; color: #be123c; border: 1px solid #fecdd3; }
     .badge-zip { background: #f3e8ff; color: #7e22ce; border: 1px solid #e9d5ff; }
     .badge-generic { background: #fef3c7; color: #b45309; border: 1px solid #fde68a; }
 
@@ -449,6 +452,7 @@
               <option value="excel">📊 Excel (.xlsx, .xls, .csv)</option>
               <option value="pdf">📑 PDF Document (.pdf)</option>
               <option value="ppt">📽️ PowerPoint (.pptx)</option>
+              <option value="video">🎬 Video (.mp4, .mov, .webm)</option>
             </select>
           </div>
         </div>
@@ -465,6 +469,26 @@
       </div><!-- end .content-body -->
     </main>
   </div><!-- end .portal-layout -->
+
+  <!-- ====== VIDEO PLAYER MODAL ====== -->
+  <div id="video-player-modal" style="display:none; position:fixed; inset:0; z-index:9999; background:rgba(0,0,0,0.85); align-items:center; justify-content:center; padding:1rem; backdrop-filter:blur(4px);">
+    <div style="background:#111827; border-radius:12px; width:100%; max-width:820px; overflow:hidden; box-shadow:0 25px 50px -12px rgba(0,0,0,0.7); border:1px solid rgba(255,255,255,0.15);">
+      <div style="padding:0.85rem 1.25rem; display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid rgba(255,255,255,0.1); color:#fff;">
+        <div id="video-modal-title" style="font-weight:700; font-size:0.95rem; color:#f9fafb; display:flex; align-items:center; gap:0.5rem; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">
+          <i class="fa-solid fa-circle-play" style="color:#ef4444; font-size:1.1rem;"></i> Video Lecture
+        </div>
+        <div style="display:flex; align-items:center; gap:0.6rem;">
+          <a id="video-modal-drive-link" href="#" target="_blank" rel="noopener noreferrer" class="btn btn-sm" style="display:none; padding:0.25rem 0.6rem; font-size:0.75rem; background:rgba(34,197,94,0.15); color:#22c55e; border:1px solid rgba(34,197,94,0.3);">
+            <i class="fa-brands fa-google-drive"></i> Open in Drive
+          </a>
+          <button type="button" onclick="closeVideoModal()" style="background:none; border:none; color:#9ca3af; font-size:1.4rem; line-height:1; cursor:pointer; padding:0 0.25rem;" title="Close Video">&times;</button>
+        </div>
+      </div>
+      <div style="position:relative; width:100%; background:#000; display:flex; align-items:center; justify-content:center; min-height:280px;">
+        <video id="video-modal-player" controls style="width:100%; max-height:480px; display:block;" playsinline controlslist="nodownload"></video>
+      </div>
+    </div>
+  </div>
 
   <!-- ====== JAVASCRIPT LOGIC ====== -->
   <script>
@@ -686,6 +710,16 @@
           badgeText: 'POWERPOINT'
         };
       }
+      if (['mp4', 'mov', 'webm', 'avi', 'mkv'].includes(ext) || (mimeType && mimeType.includes('video'))) {
+        return {
+          type: 'video',
+          label: 'Video Lecture / Drill Demonstration',
+          iconClass: 'fa-file-video',
+          containerClass: 'icon-video',
+          badgeClass: 'badge-video',
+          badgeText: 'VIDEO .MP4'
+        };
+      }
       if (['zip', 'rar', '7z'].includes(ext)) {
         return {
           type: 'zip',
@@ -727,6 +761,7 @@
         else if (format === 'excel') matchFormat = ['xlsx', 'xls', 'csv'].includes(ext);
         else if (format === 'pdf') matchFormat = ext === 'pdf';
         else if (format === 'ppt') matchFormat = ['pptx', 'ppt'].includes(ext);
+        else if (format === 'video') matchFormat = ['mp4', 'mov', 'webm', 'avi', 'mkv'].includes(ext) || (m.file_type && m.file_type.includes('video'));
 
         // Search match
         const matchSearch = !search ||
@@ -758,10 +793,11 @@
         const ft = getFileTypeDetails(m.file_name || m.file_path, m.file_type);
         const sizeFormatted = formatBytes(m.file_size_bytes);
         const uploadDate = m.created_at ? new Date(m.created_at).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' }) : 'Official Document';
-        const rawPath = m.file_path || m.file_url || '';
-        const safeName = (m.file_name || m.title || 'module').replace(/'/g, "\\'");
-
-        const isPreviewable = ft.type === 'pdf' || rawPath.startsWith('http');
+        const hasDrive = Boolean(m.drive_file_id);
+        const driveFileId = m.drive_file_id || '';
+        const rawPath = m.drive_file_url || m.file_path || m.file_url || '';
+        const isVideo = ft.type === 'video';
+        const isPreviewable = hasDrive || ft.type === 'pdf' || rawPath.startsWith('http');
 
         return `
           <div class="module-card">
@@ -774,6 +810,7 @@
                   <div style="display: flex; gap: 0.4rem; align-items: center; margin-bottom: 0.25rem; flex-wrap: wrap;">
                     <span class="file-badge ${ft.badgeClass}">${ft.badgeText}</span>
                     <span class="badge badge-admin" style="font-size: 0.72rem;">${m.category || 'General'}</span>
+                    ${hasDrive ? `<span class="badge" style="background:rgba(34,197,94,0.12); color:#16a34a; font-size:0.7rem;"><i class="fa-brands fa-google-drive"></i> Drive</span>` : ''}
                   </div>
                   <h3 class="module-card-title">${escapeHtml(m.title)}</h3>
                 </div>
@@ -801,14 +838,23 @@
               </div>
 
               <div class="module-actions">
-                <button onclick="downloadModule('${encodeURIComponent(rawPath)}', '${encodeURIComponent(m.file_name || m.title)}')" class="btn btn-primary" style="width: 100%; justify-content: center; font-size: 0.88rem;">
-                  <i class="fa-solid fa-download"></i> Download Module
-                </button>
-                ${isPreviewable ? `
-                  <button onclick="previewModule('${encodeURIComponent(rawPath)}')" class="btn btn-outline" title="Open or Preview" style="padding: 0.65rem 0.9rem;">
-                    <i class="fa-solid fa-eye"></i>
+                ${isVideo ? `
+                  <button onclick="playModuleVideo('${encodeURIComponent(m.title)}', '${driveFileId}', '${encodeURIComponent(rawPath)}')" class="btn btn-primary" style="width: 100%; justify-content: center; font-size: 0.88rem; background: linear-gradient(135deg, #e11d48, #be123c);">
+                    <i class="fa-solid fa-play"></i> Watch Video Lecture
                   </button>
-                ` : ''}
+                  <button onclick="downloadModule('${encodeURIComponent(rawPath)}', '${encodeURIComponent(m.file_name || m.title)}', '${driveFileId}')" class="btn btn-outline" title="Download Video" style="padding: 0.65rem 0.9rem;">
+                    <i class="fa-solid fa-download"></i>
+                  </button>
+                ` : `
+                  <button onclick="downloadModule('${encodeURIComponent(rawPath)}', '${encodeURIComponent(m.file_name || m.title)}', '${driveFileId}')" class="btn btn-primary" style="width: 100%; justify-content: center; font-size: 0.88rem;">
+                    <i class="fa-solid fa-download"></i> Download Module
+                  </button>
+                  ${isPreviewable ? `
+                    <button onclick="previewModule('${encodeURIComponent(rawPath)}', '${driveFileId}')" class="btn btn-outline" title="${hasDrive ? 'Preview in Google Drive' : 'Open or Preview'}" style="padding: 0.65rem 0.9rem;">
+                      <i class="fa-solid fa-eye"></i>
+                    </button>
+                  ` : ''}
+                `}
               </div>
             </div>
           </div>
@@ -833,17 +879,67 @@
         .replace(/'/g, '&#39;');
     }
 
+    // Video Player Functions
+    function playModuleVideo(encodedTitle, driveFileId, encodedPath) {
+      const title = decodeURIComponent(encodedTitle || 'Video Lecture');
+      const rawPath = decodeURIComponent(encodedPath || '');
+      const modal = document.getElementById("video-player-modal");
+      const titleEl = document.getElementById("video-modal-title");
+      const player = document.getElementById("video-modal-player");
+      const driveBtn = document.getElementById("video-modal-drive-link");
+
+      let streamSrc = rawPath;
+      if (driveFileId) {
+        streamSrc = window.DriveStorage ? window.DriveStorage.getStreamUrl(driveFileId) : `https://drive.google.com/file/d/${driveFileId}/preview`;
+        if (driveBtn) {
+          driveBtn.href = `https://drive.google.com/file/d/${driveFileId}/view`;
+          driveBtn.style.display = "inline-flex";
+        }
+      } else if (driveBtn) {
+        driveBtn.style.display = "none";
+      }
+
+      if (titleEl) {
+        titleEl.innerHTML = `<i class="fa-solid fa-circle-play" style="color:#ef4444; margin-right:0.4rem;"></i> ${escapeHtml(title)}`;
+      }
+      if (player) {
+        player.src = streamSrc;
+        player.load();
+        player.play().catch(() => {});
+      }
+      if (modal) modal.style.display = "flex";
+    }
+
+    function closeVideoModal() {
+      const modal = document.getElementById("video-player-modal");
+      const player = document.getElementById("video-modal-player");
+      if (player) {
+        player.pause();
+        player.src = "";
+      }
+      if (modal) modal.style.display = "none";
+    }
+
     // Download Handler
-    async function downloadModule(encodedPath, encodedName) {
-      const filePath = decodeURIComponent(encodedPath);
-      const fileName = decodeURIComponent(encodedName) || 'rotc_module';
+    async function downloadModule(encodedPath, encodedName, driveFileId = '') {
+      const filePath = decodeURIComponent(encodedPath || '');
+      const fileName = decodeURIComponent(encodedName || '') || 'rotc_module';
+
+      // Strategy 1: Google Drive direct download
+      if (driveFileId) {
+        const driveDownloadUrl = window.DriveStorage
+          ? window.DriveStorage.getDownloadUrl(driveFileId, fileName)
+          : `https://drive.google.com/uc?export=download&id=${driveFileId}`;
+        window.open(driveDownloadUrl, "_blank");
+        return;
+      }
 
       if (!filePath) {
         alert("Download path is not available for this file.");
         return;
       }
 
-      // Case 1: Base64 data URL
+      // Strategy 2: Base64 data URL
       if (filePath.startsWith("data:")) {
         const a = document.createElement("a");
         a.href = filePath;
@@ -854,9 +950,8 @@
         return;
       }
 
-      // Case 2: Full external HTTP URL
+      // Strategy 3: Full external HTTP URL
       if (filePath.startsWith("http://") || filePath.startsWith("https://")) {
-        // Direct link or Supabase public storage link
         const a = document.createElement("a");
         a.href = filePath;
         a.target = "_blank";
@@ -867,9 +962,8 @@
         return;
       }
 
-      // Case 3: Supabase Storage Path
+      // Strategy 4: Supabase Storage Path fallback
       try {
-        // Try public URL first
         const { data: pubData } = window.supabaseClient.storage
           .from("documents")
           .getPublicUrl(filePath);
@@ -879,7 +973,6 @@
           return;
         }
 
-        // Fallback: create signed URL (valid 1 hour)
         const { data: signedData, error } = await window.supabaseClient.storage
           .from("documents")
           .createSignedUrl(filePath, 3600);
@@ -890,14 +983,22 @@
         }
       } catch (err) {
         console.warn("Storage signed download error:", err.message);
-        // Fallback alert with instructions
         alert("Downloading file: " + fileName + "\nIf the file does not open automatically, contact the Command Staff.");
       }
     }
 
     // Preview Handler
-    async function previewModule(encodedPath) {
-      const filePath = decodeURIComponent(encodedPath);
+    async function previewModule(encodedPath, driveFileId = '') {
+      // Strategy 1: Google Drive preview
+      if (driveFileId) {
+        const drivePreviewUrl = window.DriveStorage
+          ? window.DriveStorage.getPreviewUrl(driveFileId)
+          : `https://drive.google.com/file/d/${driveFileId}/preview`;
+        window.open(drivePreviewUrl, "_blank");
+        return;
+      }
+
+      const filePath = decodeURIComponent(encodedPath || '');
       if (filePath.startsWith("http") || filePath.startsWith("data:")) {
         window.open(filePath, "_blank");
         return;

@@ -11,6 +11,7 @@ qr_passes/*.png
 !qr_passes/.gitkeep
 
 # Vercel & IDE
+node_modules/
 .vercel/
 .idea/
 .vscode/

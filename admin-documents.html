@@ -26,6 +26,7 @@
   
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="js/config.js"></script>
+  <script src="js/drive-storage.js"></script>
   <script src="js/auth.js"></script>
   <script src="js/rbac.js"></script>
 
@@ -399,11 +400,11 @@
 
           <!-- File Upload Dropzone -->
           <div class="form-group">
-            <label class="form-label">Attached File (.docx, .xlsx, .pdf, .pptx, .zip) *</label>
+            <label class="form-label">Attached File (.docx, .xlsx, .pdf, .pptx, .mp4, .zip) *</label>
             
             <div class="dropzone-box" id="upload-dropzone" onclick="document.getElementById('doc-file-input').click()">
               <input type="file" id="doc-file-input" required style="display: none;" 
-                accept=".docx,.doc,.xlsx,.xls,.csv,.pdf,.pptx,.ppt,.zip,.rar,.txt,.png,.jpg,.jpeg"
+                accept=".docx,.doc,.xlsx,.xls,.csv,.pdf,.pptx,.ppt,.mp4,.mov,.webm,.zip,.rar,.txt,.png,.jpg,.jpeg"
                 onchange="handleFileSelection(event)">
               <div class="dropzone-icon">
                 <i class="fa-solid fa-cloud-arrow-up"></i>
@@ -412,7 +413,7 @@
                 Click to browse or drop file here
               </div>
               <div style="font-size: 0.78rem; color: var(--portal-muted); margin-top: 0.25rem;">
-                Supports Microsoft Word (.docx), Excel (.xlsx), PDF (.pdf), PowerPoint (.pptx), and ZIP archives (Up to 50MB)
+                Supports Microsoft Word, Excel, PDF, PowerPoint, Video Lectures (.mp4), and ZIP archives (Up to 100MB)
               </div>
             </div>
 
@@ -541,6 +542,9 @@
       }
       if (['pptx', 'ppt'].includes(ext)) {
         return { type: 'ppt', ext: 'PPTX', icon: 'fa-file-powerpoint', pill: 'pill-ppt', preview: 'preview-ppt' };
+      }
+      if (['mp4', 'mov', 'webm', 'avi', 'mkv'].includes(ext) || (mime && mime.includes('video'))) {
+        return { type: 'video', ext: 'VIDEO', icon: 'fa-file-video', pill: 'pill-video', preview: 'preview-video' };
       }
       if (['zip', 'rar'].includes(ext)) {
         return { type: 'zip', ext: ext.toUpperCase(), icon: 'fa-file-zipper', pill: 'pill-zip', preview: 'preview-zip' };
@@ -783,10 +787,16 @@
         const info = getFileTypeInfo(d.file_name || d.file_path, d.file_type);
         const sizeFormatted = formatBytes(d.file_size_bytes);
         const dateFormatted = d.created_at ? new Date(d.created_at).toLocaleDateString() : 'N/A';
-        const rawPath = d.file_path || d.file_url || '';
+
+        // Google Drive priority: use drive_file_id if present, else fallback to file_path
+        const hasDrive = Boolean(d.drive_file_id);
+        const drivePreviewUrl = hasDrive ? `https://drive.google.com/file/d/${d.drive_file_id}/preview` : null;
+        const driveDownloadUrl = hasDrive ? `https://drive.google.com/uc?export=download&id=${d.drive_file_id}` : null;
+        const rawPath = driveDownloadUrl || d.drive_file_url || d.file_path || d.file_url || '';
         const safePath = encodeURIComponent(rawPath);
         const safeName = encodeURIComponent(d.file_name || d.title || 'document');
-        const isPreviewable = info.type === 'pdf' || rawPath.startsWith('http');
+        const isPreviewable = hasDrive || info.type === 'pdf' || rawPath.startsWith('http');
+        const previewPath = encodeURIComponent(drivePreviewUrl || rawPath);
 
         return `
           <tr>
@@ -798,6 +808,7 @@
                 <div>
                   <div style="font-weight: 700; color: var(--portal-ink);">${escapeHtml(d.title)}</div>
                   <div style="font-size: 0.78rem; color: var(--portal-muted); font-family: monospace;">${escapeHtml(d.file_name || 'Attached File')}</div>
+                  ${hasDrive ? `<div style="font-size:0.72rem; color:#22c55e; margin-top:0.1rem;"><i class="fa-brands fa-google-drive"></i> Google Drive</div>` : ''}
                 </div>
               </div>
             </td>
@@ -822,15 +833,15 @@
               </span>
             </td>
             <td style="text-align: right; white-space: nowrap;">
-              <button onclick="downloadDoc('${safePath}', '${safeName}')" class="btn btn-outline btn-sm" title="Download">
+              <button onclick="downloadDoc('${safePath}', '${safeName}')" class="btn btn-outline btn-sm" title="${hasDrive ? 'Download from Google Drive' : 'Download'}">
                 <i class="fa-solid fa-download"></i>
               </button>
               ${isPreviewable ? `
-                <button onclick="previewDoc('${safePath}')" class="btn btn-outline btn-sm" title="Preview / Open">
+                <button onclick="previewDoc('${previewPath}')" class="btn btn-outline btn-sm" title="${hasDrive ? 'Preview in Google Drive' : 'Preview / Open'}">
                   <i class="fa-solid fa-eye"></i>
                 </button>
               ` : ''}
-              <button onclick="deleteDoc('${d.id}', '${safePath}')" class="btn btn-danger btn-sm" title="Delete">
+              <button onclick="deleteDoc('${d.id}', '${safePath}', '${d.drive_file_id || ''}')" class="btn btn-danger btn-sm" title="Delete">
                 <i class="fa-solid fa-trash-can"></i>
               </button>
             </td>
@@ -927,7 +938,7 @@
       });
     }
 
-    // Handle Upload Document
+    // Handle Upload Document — Google Drive Primary, Supabase Storage fallback
     async function handleUploadDocument(e) {
       e.preventDefault();
       const title = document.getElementById("doc-title-input").value.trim();
@@ -943,14 +954,40 @@
       const file = selectedFileObject;
       const btn = document.getElementById("btn-submit-upload");
       btn.disabled = true;
-      btn.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> Uploading ${file.name}...`;
+      btn.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> Uploading to Google Drive...`;
 
       try {
+        // ── STRATEGY 1: Try Google Drive via DriveStorage service ──────────
+        if (window.DriveStorage) {
+          try {
+            const record = await window.DriveStorage.uploadRepositoryDocument({
+              file,
+              title,
+              description,
+              category,
+              accessLevel: access_level,
+              uploadedBy: currentOfficer?.id || null,
+              onProgress: (pct) => {
+                btn.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> Uploading to Google Drive... ${pct}%`;
+              },
+            });
+
+            showToast(`Module "${title}" uploaded to Google Drive and published! ✓`);
+            closeUploadModal();
+            await loadDocuments();
+            return; // Success — exit early
+          } catch (driveErr) {
+            console.warn("[Documents] Google Drive upload error, falling back:", driveErr.message);
+            // Fall through to Supabase Storage fallback
+          }
+        }
+
+        // ── STRATEGY 2: Supabase Storage fallback ─────────────────────────
+        btn.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> Uploading ${file.name}...`;
         const cleanName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
         const storagePath = `documents/${Date.now()}_${cleanName}`;
         let finalFilePath = storagePath;
 
-        // Step 1: Attempt upload to Supabase Storage bucket 'documents'
         let storageSuccess = false;
         try {
           const { data: upData, error: upError } = await window.supabaseClient.storage
@@ -961,19 +998,18 @@
             storageSuccess = true;
             finalFilePath = upData.path;
           } else {
-            console.warn("Storage upload returned:", upError?.message);
+            console.warn("Supabase Storage upload returned:", upError?.message);
           }
         } catch (stErr) {
-          console.warn("Storage upload caught exception:", stErr.message);
+          console.warn("Supabase Storage upload exception:", stErr.message);
         }
 
-        // If storage bucket was not created in Supabase yet, convert file to Base64 data URI
+        // ── STRATEGY 3: Base64 inline data URI fallback ────────────────────
         if (!storageSuccess) {
-          console.log("Using inline binary data URI fallback for document.");
+          console.log("Using inline Base64 data URI fallback for document.");
           finalFilePath = await fileToBase64(file);
         }
 
-        // Step 2: Insert into Supabase documents table
         const payload = {
           title,
           description,
@@ -998,7 +1034,6 @@
           console.warn("Database insert note:", dbError.message);
         }
 
-        // Step 3: Also save to Local Storage cache for instant offline & cross-tab sync
         const newRecord = (insertData && insertData[0]) ? insertData[0] : {
           ...payload,
           id: 'local_' + Date.now()
@@ -1095,31 +1130,38 @@
       }
     }
 
-    // Delete Doc
-    async function deleteDoc(id, encodedPath) {
+    // Delete Doc — Google Drive + Supabase + local cache
+    async function deleteDoc(id, encodedPath, driveFileId) {
       if (!confirm("Are you sure you want to permanently delete this module/document from the repository?")) return;
 
       const filePath = decodeURIComponent(encodedPath || '');
 
       try {
-        // Try storage delete
-        if (filePath && !filePath.startsWith("data:") && !filePath.startsWith("http")) {
-          await window.supabaseClient.storage.from("documents").remove([filePath]);
+        // 1. Delete from Google Drive if file ID is known
+        if (driveFileId && driveFileId !== 'undefined' && driveFileId !== '' && window.DriveStorage) {
+          await window.DriveStorage.deleteFile(driveFileId).catch(err => {
+            console.warn("[Documents] Google Drive delete notice:", err.message);
+          });
         }
 
-        // Database delete
+        // 2. Try Supabase Storage delete (for older files stored there)
+        if (filePath && !filePath.startsWith("data:") && !filePath.startsWith("http")) {
+          await window.supabaseClient.storage.from("documents").remove([filePath]).catch(() => {});
+        }
+
+        // 3. Database delete via Supabase
         if (id && !id.startsWith('local_')) {
           await window.supabaseClient.from("documents").delete().eq("id", id);
         }
 
-        // Local cache delete
+        // 4. Local cache delete
         try {
           let cached = JSON.parse(localStorage.getItem('rotcims_modules_cache') || '[]');
           cached = cached.filter(item => item.id !== id && item.file_path !== filePath);
           localStorage.setItem('rotcims_modules_cache', JSON.stringify(cached));
         } catch (e) {}
 
-        showToast("Module removed successfully.");
+        showToast("Module removed successfully from Google Drive and Supabase.");
         await loadDocuments();
       } catch (err) {
         alert("Delete error: " + err.message);
