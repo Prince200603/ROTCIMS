@@ -97,7 +97,9 @@ export default async function handler(req, res) {
 
   try {
     const auth = getGoogleAuth();
-    await auth.authorize();
+    if (typeof auth.authorize === 'function') {
+      await auth.authorize();
+    }
     const drive = google.drive({ version: 'v3', auth });
 
     await drive.files.delete({ fileId });

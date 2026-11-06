@@ -71,7 +71,9 @@ export default async function handler(req, res) {
   let drive;
   try {
     const auth = getGoogleAuth();
-    await auth.authorize();
+    if (typeof auth.authorize === 'function') {
+      await auth.authorize();
+    }
     drive = google.drive({ version: 'v3', auth });
   } catch (authErr) {
     return res.status(500).json({ error: `Google Drive connection error: ${authErr.message}` });
