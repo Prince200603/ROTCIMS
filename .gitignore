@@ -20,3 +20,13 @@ node_modules/
 Thumbs.db
 .DS_Store
 
+# Google Cloud & OAuth Credential JSON files
+*client_secret*.json
+client_secret*.json
+credentials.json
+*.credentials.json
+token.json
+oauth_credentials.json
+rotcims-storage-*.json
+
+

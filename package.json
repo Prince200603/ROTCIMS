@@ -4,6 +4,7 @@
   "description": "ROTC Information Management System with Supabase and Google Drive Integration",
   "type": "module",
   "scripts": {
+    "auth:drive": "node nodescripts/generate_oauth_token.js",
     "test:drive": "node test_drive_integration.js"
   },
   "dependencies": {

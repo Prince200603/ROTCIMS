@@ -30,33 +30,49 @@ export default async function handler(req, res) {
 
   const email = process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL;
   const privateKey = formatPrivateKey(process.env.GOOGLE_PRIVATE_KEY);
+  const refreshToken = process.env.GOOGLE_REFRESH_TOKEN;
+  const clientId = process.env.GOOGLE_CLIENT_ID;
+  const clientSecret = process.env.GOOGLE_CLIENT_SECRET;
   const rootFolderId = process.env.GOOGLE_DRIVE_FOLDER_ID;
   const supabaseUrl = process.env.SUPABASE_URL;
 
+  const hasOAuth2 = Boolean(refreshToken && clientId && clientSecret);
+  const hasServiceAccount = Boolean(email && privateKey);
+
   const configCheck = {
+    authMode: hasOAuth2 ? 'oauth2' : (hasServiceAccount ? 'service_account' : 'none'),
+    oauth2Configured: hasOAuth2,
     serviceAccountEmailSet: Boolean(email),
     privateKeySet: Boolean(privateKey),
     rootFolderIdSet: Boolean(rootFolderId),
     supabaseUrlSet: Boolean(supabaseUrl),
   };
 
-  if (!email || !privateKey) {
+  if (!hasOAuth2 && !hasServiceAccount) {
     return res.status(200).json({
       ok: false,
       connected: false,
-      message: 'Google Service Account credentials are not configured.',
+      message: 'Google Drive credentials are not configured. Provide OAuth2 Refresh Token (GOOGLE_REFRESH_TOKEN, GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET) or Service Account (GOOGLE_SERVICE_ACCOUNT_EMAIL, GOOGLE_PRIVATE_KEY).',
       checks: configCheck,
     });
   }
 
   try {
-    const auth = new google.auth.JWT({
-      email,
-      key: privateKey,
-      scopes: ['https://www.googleapis.com/auth/drive'],
-    });
+    let auth;
+    if (hasOAuth2) {
+      const oauth2Client = new google.auth.OAuth2(clientId, clientSecret);
+      oauth2Client.setCredentials({ refresh_token: refreshToken });
+      auth = oauth2Client;
+    } else {
+      const jwtAuth = new google.auth.JWT({
+        email,
+        key: privateKey,
+        scopes: ['https://www.googleapis.com/auth/drive'],
+      });
+      await jwtAuth.authorize();
+      auth = jwtAuth;
+    }
 
-    await auth.authorize();
     const drive = google.drive({ version: 'v3', auth });
 
     // Verify root folder or list folders
@@ -88,7 +104,8 @@ export default async function handler(req, res) {
       ok: true,
       connected: true,
       message: 'Google Drive API successfully connected.',
-      serviceAccount: email.replace(/@.+$/, '@...'),
+      serviceAccount: hasOAuth2 ? 'OAuth 2.0 User Account' : (email ? email.replace(/@.+$/, '@...') : 'None'),
+      authMode: hasOAuth2 ? 'oauth2' : 'service_account',
       rootFolderId: resolvedRootId || null,
       topFolders,
       requiredHierarchy: {
